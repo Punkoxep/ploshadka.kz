@@ -1,0 +1,127 @@
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id            String         @id @default(uuid())
+  iin           String         @unique
+  phone_number  String         @unique
+  full_name     String
+  birth_date    DateTime
+  gender        String         // 'male' | 'female'
+  role          String         @default("client") // 'client' | 'admin'
+  is_blocked    Boolean        @default(false)
+  password_hash String
+  email         String?
+  avatar_url    String?
+  created_at    DateTime       @default(now())
+
+  hostedBookings Booking[]     @relation("HostBookings")
+  bookingGuests  BookingGuest[]
+  lockLogs       LockLog[]
+
+  @@map("users")
+}
+
+model Ground {
+  id                 String     @id @default(uuid())
+  name               String
+  type               String     // 'football' | 'volleyball' | 'basketball'
+  address            String
+  operating_schedule String     // e.g. "08:00 - 23:00"
+  cost_per_hour      Float
+  qr_code_token      String     @unique
+  ttlock_lock_id     String
+  ttlock_mac_address String?
+  created_at         DateTime   @default(now())
+
+  gateways Gateway[]
+  bookings Booking[]
+  lockLogs LockLog[]
+
+  @@map("grounds")
+}
+
+model Gateway {
+  id                String   @id @default(uuid())
+  ground_id         String
+  ground            Ground   @relation(fields: [ground_id], references: [id], onDelete: Cascade)
+  gateway_name      String
+  ttlock_gateway_id String   @unique
+  status            String   @default("online") // 'online' | 'offline'
+  last_ping_at      DateTime @default(now())
+  created_at        DateTime @default(now())
+
+  logs GatewayStatusLog[]
+
+  @@map("gateways")
+}
+
+model Booking {
+  id             String         @id @default(uuid())
+  ground_id      String
+  ground         Ground         @relation(fields: [ground_id], references: [id], onDelete: Cascade)
+  host_user_id   String
+  host_user      User           @relation("HostBookings", fields: [host_user_id], references: [id], onDelete: Cascade)
+  booking_date   String         // 'YYYY-MM-DD'
+  start_time     String         // 'HH:mm'
+  end_time       String         // 'HH:mm'
+  status         String         @default("confirmed") // 'pending' | 'confirmed' | 'cancelled' | 'completed'
+  payment_status String         @default("paid") // 'unpaid' | 'paid' | 'refunded'
+  total_price    Float
+  invite_token   String         @unique @default(uuid())
+  created_at     DateTime       @default(now())
+
+  guests   BookingGuest[]
+  lockLogs LockLog[]
+
+  @@map("bookings")
+}
+
+model BookingGuest {
+  id            String   @id @default(uuid())
+  booking_id    String
+  booking       Booking  @relation(fields: [booking_id], references: [id], onDelete: Cascade)
+  user_id       String
+  user          User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  type          String   // 'invited' | 'spontaneous_check_in'
+  status        String   @default("approved") // 'approved' | 'pending'
+  checked_in_at DateTime @default(now())
+  created_at    DateTime @default(now())
+
+  @@unique([booking_id, user_id])
+  @@map("booking_guests")
+}
+
+model LockLog {
+  id          String   @id @default(uuid())
+  booking_id  String?
+  booking     Booking? @relation(fields: [booking_id], references: [id], onDelete: SetNull)
+  user_id     String
+  user        User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  ground_id   String
+  ground      Ground   @relation(fields: [ground_id], references: [id], onDelete: Cascade)
+  method      String   // 'app_button' | 'qr_code'
+  unlock_type String   // 'online_cloud' | 'offline_passcode' | 'offline_ekey'
+  success     Boolean
+  details     String?
+  created_at  DateTime @default(now())
+
+  @@map("lock_logs")
+}
+
+model GatewayStatusLog {
+  id           String   @id @default(uuid())
+  gateway_id   String
+  gateway      Gateway  @relation(fields: [gateway_id], references: [id], onDelete: Cascade)
+  status       String   // 'online' | 'offline'
+  response_raw String?
+  checked_at   DateTime @default(now())
+
+  @@map("gateway_status_logs")
+}

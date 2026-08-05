@@ -1,0 +1,810 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Шэринг Спортивных Площадок | TTLock & IIN System Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-dark: #0a0e17;
+      --card-bg: rgba(22, 28, 45, 0.75);
+      --card-border: rgba(255, 255, 255, 0.08);
+      --accent-primary: #10b981;
+      --accent-glow: rgba(16, 185, 129, 0.35);
+      --accent-blue: #3b82f6;
+      --accent-amber: #f59e0b;
+      --accent-red: #ef4444;
+      --text-main: #f3f4f6;
+      --text-muted: #9ca3af;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      background: radial-gradient(circle at 10% 20%, #111827 0%, #070a10 100%);
+      color: var(--text-main);
+      min-height: 100vh;
+      padding-bottom: 60px;
+    }
+
+    h1, h2, h3, h4 {
+      font-family: 'Outfit', sans-serif;
+    }
+
+    header {
+      background: rgba(15, 23, 42, 0.85);
+      backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--card-border);
+      padding: 20px 40px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .brand-logo {
+      width: 44px;
+      height: 44px;
+      background: linear-gradient(135deg, #10b981, #3b82f6);
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      font-size: 22px;
+      color: #fff;
+      box-shadow: 0 0 20px var(--accent-glow);
+    }
+
+    .brand-title {
+      font-size: 20px;
+      font-weight: 700;
+      background: linear-gradient(90deg, #ffffff, #9ca3af);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .system-badge {
+      padding: 6px 14px;
+      border-radius: 30px;
+      font-size: 13px;
+      font-weight: 600;
+      background: rgba(16, 185, 129, 0.15);
+      color: #34d399;
+      border: 1px solid rgba(52, 211, 153, 0.3);
+    }
+
+    .container {
+      max-width: 1300px;
+      margin: 30px auto;
+      padding: 0 20px;
+      display: grid;
+      grid-template-columns: 320px 1fr;
+      gap: 24px;
+    }
+
+    .sidebar {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      backdrop-filter: blur(12px);
+      border-radius: 16px;
+      padding: 24px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    }
+
+    .card-title {
+      font-size: 16px;
+      font-weight: 700;
+      margin-bottom: 16px;
+      color: #e5e7eb;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .user-pill {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--card-border);
+      padding: 12px;
+      border-radius: 10px;
+      margin-bottom: 10px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .user-pill:hover, .user-pill.active {
+      background: rgba(16, 185, 129, 0.12);
+      border-color: rgba(16, 185, 129, 0.4);
+    }
+
+    .user-name {
+      font-weight: 600;
+      font-size: 14px;
+    }
+
+    .user-meta {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+
+    .tabs {
+      display: flex;
+      gap: 10px;
+      border-bottom: 1px solid var(--card-border);
+      margin-bottom: 24px;
+      padding-bottom: 12px;
+    }
+
+    .tab-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      font-size: 15px;
+      font-weight: 600;
+      padding: 8px 16px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .tab-btn:hover {
+      color: #fff;
+    }
+
+    .tab-btn.active {
+      background: var(--accent-primary);
+      color: #000;
+    }
+
+    .tab-content {
+      display: none;
+    }
+
+    .tab-content.active {
+      display: block;
+    }
+
+    .form-group {
+      margin-bottom: 16px;
+    }
+
+    label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      color: #d1d5db;
+      margin-bottom: 6px;
+    }
+
+    input, select {
+      width: 100%;
+      background: rgba(10, 14, 23, 0.7);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 10px;
+      padding: 12px 14px;
+      color: #fff;
+      font-size: 14px;
+      outline: none;
+      transition: border 0.2s;
+    }
+
+    input:focus, select:focus {
+      border-color: var(--accent-primary);
+      box-shadow: 0 0 10px var(--accent-glow);
+    }
+
+    .btn {
+      background: linear-gradient(135deg, var(--accent-primary), #059669);
+      color: #000;
+      font-weight: 700;
+      font-size: 14px;
+      border: none;
+      padding: 12px 20px;
+      border-radius: 10px;
+      cursor: pointer;
+      width: 100%;
+      transition: transform 0.1s, box-shadow 0.2s;
+      box-shadow: 0 4px 14px var(--accent-glow);
+    }
+
+    .btn:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 20px var(--accent-glow);
+    }
+
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.1);
+      color: #fff;
+      box-shadow: none;
+    }
+
+    .btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.18);
+    }
+
+    .btn-danger {
+      background: linear-gradient(135deg, #ef4444, #dc2626);
+      color: #fff;
+      box-shadow: 0 4px 14px rgba(239, 68, 68, 0.3);
+    }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    .ground-card {
+      background: rgba(30, 41, 59, 0.5);
+      border: 1px solid var(--card-border);
+      border-radius: 14px;
+      padding: 20px;
+      transition: all 0.2s;
+    }
+
+    .ground-card:hover {
+      border-color: rgba(59, 130, 246, 0.4);
+      transform: translateY(-2px);
+    }
+
+    .ground-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+
+    .ground-title {
+      font-size: 16px;
+      font-weight: 700;
+      color: #f3f4f6;
+    }
+
+    .tag {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      padding: 4px 8px;
+      border-radius: 6px;
+    }
+
+    .tag-football { background: rgba(16, 185, 129, 0.2); color: #34d399; }
+    .tag-volleyball { background: rgba(245, 158, 11, 0.2); color: #fbbf24; }
+    .tag-basketball { background: rgba(59, 130, 246, 0.2); color: #60a5fa; }
+
+    .qr-badge {
+      display: inline-block;
+      font-family: monospace;
+      font-size: 12px;
+      background: rgba(0, 0, 0, 0.4);
+      padding: 4px 8px;
+      border-radius: 6px;
+      margin-top: 8px;
+      color: #a7f3d0;
+    }
+
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 4px 10px;
+      border-radius: 20px;
+    }
+
+    .status-online { background: rgba(16, 185, 129, 0.2); color: #34d399; }
+    .status-offline { background: rgba(239, 68, 68, 0.2); color: #f87171; }
+
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+    }
+
+    .dot-online { background: #10b981; box-shadow: 0 0 8px #10b981; }
+    .dot-offline { background: #ef4444; box-shadow: 0 0 8px #ef4444; }
+
+    .log-box {
+      background: #070a10;
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 16px;
+      font-family: monospace;
+      font-size: 13px;
+      color: #34d399;
+      max-height: 250px;
+      overflow-y: auto;
+    }
+
+    .alert {
+      padding: 12px 16px;
+      border-radius: 10px;
+      font-size: 13px;
+      margin-bottom: 16px;
+      display: none;
+    }
+
+    .alert-success { background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(52, 211, 153, 0.3); }
+    .alert-error { background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(248, 113, 113, 0.3); }
+    .alert-warning { background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(251, 191, 36, 0.3); }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="brand">
+      <div class="brand-logo">⚽</div>
+      <div>
+        <div class="brand-title">Шэринг Спортивных Площадок</div>
+        <div style="font-size: 12px; color: var(--text-muted);">TTLock Cloud + IIN Validator + 15-Person Slot Engine</div>
+      </div>
+    </div>
+    <div class="system-badge">● API Online (Port 3000)</div>
+  </header>
+
+  <div class="container">
+    <!-- Sidebar / Auth Switcher -->
+    <div class="sidebar">
+      <div class="card">
+        <div class="card-title">👤 Активный аккаунт</div>
+        <div id="usersList">
+          <!-- Dynamically populated -->
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">📡 TTLock 5G Wi-Fi Шлюзы</div>
+        <div id="gatewaysList">
+          <div style="font-size: 12px; color: var(--text-muted);">Загрузка шлюзов...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Main Content Area -->
+    <div>
+      <div id="alertBox" class="alert"></div>
+
+      <div class="tabs">
+        <button class="tab-btn active" onclick="switchTab('tab-grounds')">🏟️ Площадки & QR Двери</button>
+        <button class="tab-btn" onclick="switchTab('tab-iin')">🪪 Валидатор ИИН РК</button>
+        <button class="tab-btn" onclick="switchTab('tab-bookings')">📅 Бронирования & 15 Слотов</button>
+        <button class="tab-btn" onclick="switchTab('tab-admin')">⚙️ Админ-Мониторинг</button>
+      </div>
+
+      <!-- TAB 1: GROUNDS & HYBRID ENTRY -->
+      <div id="tab-grounds" class="tab-content active">
+        <div class="card">
+          <div class="card-title">🏟️ Спортивные площадки (Школа №11)</div>
+          <div id="groundsGrid" class="grid-2">
+            <!-- Dynamically populated grounds -->
+          </div>
+        </div>
+
+        <div class="card" style="margin-top: 24px;">
+          <div class="card-title">🚪 Симулятор гибридного входа (Разблокировка TTLock)</div>
+          <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 16px;">
+            Протестируйте открывание двери кнопкой из приложения или сканированием статичного QR-кода на двери.
+          </p>
+          <div class="grid-2">
+            <div>
+              <label>Способ А: Кнопка "Открыть дверь" в приложении</label>
+              <input type="text" id="appUnlockBookingId" placeholder="Введите ID активной брони">
+              <button class="btn" style="margin-top: 10px;" onclick="unlockAppButton()">🔓 Открыть дверным замком (Кнопка)</button>
+            </div>
+
+            <div>
+              <label>Способ Б: Сканирование статичного QR на двери</label>
+              <select id="qrUnlockTokenSelect">
+                <option value="QR_SCHOOL11_FOOTBALL">QR_SCHOOL11_FOOTBALL (Школа №11 - Футбол)</option>
+                <option value="QR_SCHOOL11_BASKETBALL">QR_SCHOOL11_BASKETBALL (Школа №11 - Баскетбол)</option>
+              </select>
+              <button class="btn btn-secondary" style="margin-top: 10px;" onclick="unlockQrCode()">📷 Отсканировать QR на двери</button>
+            </div>
+          </div>
+
+          <div style="margin-top: 20px;">
+            <label>Результат ответа замка / TTLock Cloud / Offline PIN:</label>
+            <div id="lockResponseLog" class="log-box">Нажмите «Открыть» для тестирования...</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 2: IIN VALIDATOR -->
+      <div id="tab-iin" class="tab-content">
+        <div class="card">
+          <div class="card-title">🪪 Строгий Валидатор ИИН РК (Двухпроходный Modulo 11)</div>
+          <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 16px;">
+            Введите ИИН РК (12 цифр). Система автоматически определит век рождения, дату рождения и пол, а также проверит контрольный разряд по математическому алгоритму РК.
+          </p>
+          <div class="form-group">
+            <label>ИИН Пользователя (12 цифр)</label>
+            <input type="text" id="testIinInput" placeholder="Например: 950515350124" value="950515350124" oninput="liveValidateIIN()">
+          </div>
+
+          <div id="iinCalcResult" class="log-box" style="margin-bottom: 20px;">
+            Введите 12 цифр для проверки...
+          </div>
+
+          <h3 style="font-size: 15px; margin-bottom: 12px; color: #fff;">Быстрая регистрация по проверенному ИИН</h3>
+          <div class="grid-2">
+            <div class="form-group">
+              <label>ФИО</label>
+              <input type="text" id="regFullName" placeholder="Иван Иванов" value="Кайрат Нурланов">
+            </div>
+            <div class="form-group">
+              <label>Телефон РК</label>
+              <input type="text" id="regPhone" placeholder="+77070001122" value="+77079998877">
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Пароль</label>
+            <input type="password" id="regPassword" value="password123">
+          </div>
+          <button class="btn" onclick="submitRegistration()">Зарегистрировать с автозаполнением Пола/Даты рождения</button>
+        </div>
+      </div>
+
+      <!-- TAB 3: BOOKINGS & 15-SLOT MANAGEMENT -->
+      <div id="tab-bookings" class="tab-content">
+        <div class="card">
+          <div class="card-title">📅 Создать бронирование сеанса</div>
+          <div class="grid-2">
+            <div class="form-group">
+              <label>Спортивная площадка</label>
+              <select id="bookGroundSelect"></select>
+            </div>
+            <div class="form-group">
+              <label>Дата (YYYY-MM-DD)</label>
+              <input type="date" id="bookDate">
+            </div>
+            <div class="form-group">
+              <label>Время начала (HH:mm)</label>
+              <input type="text" id="bookStartTime" value="18:00">
+            </div>
+            <div class="form-group">
+              <label>Время окончания (HH:mm)</label>
+              <input type="text" id="bookEndTime" value="20:00">
+            </div>
+          </div>
+          <button class="btn" onclick="createBooking()">Забронировать площадку</button>
+        </div>
+
+        <div class="card" style="margin-top: 24px;">
+          <div class="card-title">👥 Приглашение друзей (До 15 человек на слот)</div>
+          <div class="grid-2">
+            <div>
+              <label>Сценарий 1: Ссылка-приглашение от хозяина</label>
+              <input type="text" id="inviteTokenInput" placeholder="Введите токен приглашения">
+              <button class="btn btn-secondary" style="margin-top: 10px;" onclick="acceptInviteToken()">Присоединиться по ссылке (type: 'invited')</button>
+            </div>
+            <div>
+              <label>Сценарий 2: Спонтанный вход через QR на площадке</label>
+              <select id="spontaneousQrSelect">
+                <option value="QR_SCHOOL11_FOOTBALL">QR_SCHOOL11_FOOTBALL (Школа №11 - Футбол)</option>
+                <option value="QR_SCHOOL11_BASKETBALL">QR_SCHOOL11_BASKETBALL (Школа №11 - Баскетбол)</option>
+              </select>
+              <button class="btn btn-secondary" style="margin-top: 10px;" onclick="spontaneousQrCheckIn()">Войти спонтанно по QR (type: 'spontaneous_check_in')</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 4: ADMIN MONITORING -->
+      <div id="tab-admin" class="tab-content">
+        <div class="card">
+          <div class="card-title">⚙️ Мониторинг Wi-Fi шлюзов TTLock & Статистика</div>
+          <div id="systemStats" style="display: flex; gap: 16px; margin-bottom: 20px;">
+            <!-- Stats -->
+          </div>
+
+          <div style="margin-bottom: 20px;">
+            <h3 style="font-size: 14px; margin-bottom: 10px; color: #fff;">Симуляция сбоя связи шлюза (Тест резервного PIN/eKey):</h3>
+            <div id="adminGatewaysControl"></div>
+          </div>
+
+          <div class="card-title">📜 Журнал аудита разблокировок замков</div>
+          <div id="lockAuditLogs" class="log-box" style="max-height: 300px;">
+            Загрузка логов аудита...
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    const API_BASE = '/api/v1';
+    let currentUserToken = '';
+    let currentUserId = '';
+
+    // Seed preset users
+    const presetUsers = [
+      { iin: '890918350184', name: 'Ивкин Антон Витальевич (Владелец & Admin)', phone: '+77715269538', role: 'admin' },
+      { iin: '010320500248', name: 'Азамат Другов (Приглашенный)', phone: '+77778889900', role: 'client' },
+      { iin: '020810600358', name: 'Диана Спонтанная (Спонтанный QR)', phone: '+77471234567', role: 'client' },
+    ];
+
+    window.onload = async () => {
+      document.getElementById('bookDate').value = new Date().toISOString().split('T')[0];
+      renderUserPills();
+      await loginUser(presetUsers[0].phone, 'password123');
+      await loadGrounds();
+      await loadGateways();
+      liveValidateIIN();
+    };
+
+    function renderUserPills() {
+      const container = document.getElementById('usersList');
+      container.innerHTML = presetUsers.map(u => `
+        <div class="user-pill ${u.phone === activePhone ? 'active' : ''}" onclick="loginUser('${u.phone}', 'password123')">
+          <div class="user-name">${u.name}</div>
+          <div class="user-meta">ИИН: ${u.iin} | Тел: ${u.phone}</div>
+        </div>
+      `).join('');
+    }
+
+    let activePhone = presetUsers[0].phone;
+
+    async function loginUser(phone, password) {
+      activePhone = phone;
+      renderUserPills();
+      try {
+        const res = await fetch(`${API_BASE}/auth/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phone_or_iin: phone, password })
+        });
+        const data = await res.json();
+        if (data.success) {
+          currentUserToken = data.data.token;
+          currentUserId = data.data.user.id;
+          showAlert(`Авторизован как: ${data.data.user.full_name} (${data.data.user.role})`, 'success');
+        } else {
+          showAlert(data.message, 'error');
+        }
+      } catch (err) {
+        showAlert('Ошибка подключения к API: ' + err.message, 'error');
+      }
+    }
+
+    function switchTab(tabId) {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+      event.target.classList.add('active');
+      document.getElementById(tabId).classList.add('active');
+      if (tabId === 'tab-admin') loadAdminData();
+    }
+
+    function showAlert(msg, type = 'success') {
+      const box = document.getElementById('alertBox');
+      box.className = `alert alert-${type}`;
+      box.innerText = msg;
+      box.style.display = 'block';
+      setTimeout(() => { box.style.display = 'none'; }, 5000);
+    }
+
+    async function loadGrounds() {
+      const res = await fetch(`${API_BASE}/grounds`);
+      const data = await res.json();
+      if (!data.success) return;
+
+      const grid = document.getElementById('groundsGrid');
+      const select = document.getElementById('bookGroundSelect');
+      
+      grid.innerHTML = data.data.map(g => `
+        <div class="ground-card">
+          <div class="ground-header">
+            <span class="ground-title">${g.name}</span>
+            <span class="tag tag-${g.type}">${g.type}</span>
+          </div>
+          <div style="font-size: 13px; color: var(--text-muted);">${g.address}</div>
+          <div style="font-size: 13px; margin-top: 6px;">💰 Стоимость: <b>${g.cost_per_hour} ₸/час</b></div>
+          <div class="qr-badge">🚪 QR дверного замка: ${g.qr_code_token}</div>
+        </div>
+      `).join('');
+
+      select.innerHTML = data.data.map(g => `<option value="${g.id}">${g.name}</option>`).join('');
+    }
+
+    async function loadGateways() {
+      const res = await fetch(`${API_BASE}/admin/gateways`);
+      const data = await res.json();
+      if (!data.success) return;
+
+      const container = document.getElementById('gatewaysList');
+      container.innerHTML = data.data.map(gw => `
+        <div style="margin-bottom: 8px; font-size: 12px;">
+          <div><b>${gw.gateway_name}</b></div>
+          <span class="status-pill status-${gw.status}">
+            <span class="dot dot-${gw.status}"></span> ${gw.status === 'online' ? 'В сети (5G)' : 'Офлайн (Сбой)'}
+          </span>
+        </div>
+      `).join('');
+    }
+
+    async function liveValidateIIN() {
+      const iin = document.getElementById('testIinInput').value;
+      const res = await fetch(`${API_BASE}/iin/validate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ iin })
+      });
+      const data = await res.json();
+      const log = document.getElementById('iinCalcResult');
+
+      if (data.success && data.data.isValid) {
+        const d = data.data;
+        const formattedDate = new Date(d.birthDate).toLocaleDateString('ru-RU');
+        log.innerHTML = `✅ <b>ИИН ВАЛИДЕН</b>\n🎂 Дата рождения: ${formattedDate}\n👤 Пол: ${d.gender === 'male' ? 'Мужской (Код ' + iin[6] + ')' : 'Женский (Код ' + iin[6] + ')'}\n🔢 Контрольный разряд: Сверен (12-я цифра = ${iin[11]})`;
+        log.style.color = '#34d399';
+      } else {
+        log.innerHTML = `❌ <b>ОШИБКА ВАЛИДАЦИИ ИИН</b>\nПричина: ${data.data?.error || 'Неверный формат'}`;
+        log.style.color = '#f87171';
+      }
+    }
+
+    async function submitRegistration() {
+      const iin = document.getElementById('testIinInput').value;
+      const full_name = document.getElementById('regFullName').value;
+      const phone_number = document.getElementById('regPhone').value;
+      const password = document.getElementById('regPassword').value;
+
+      const res = await fetch(`${API_BASE}/auth/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ iin, full_name, phone_number, password })
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        showAlert(data.message, 'success');
+        presetUsers.push({ iin, name: full_name, phone: phone_number, role: 'client' });
+        renderUserPills();
+      } else {
+        showAlert(data.message, 'error');
+      }
+    }
+
+    async function createBooking() {
+      const ground_id = document.getElementById('bookGroundSelect').value;
+      const booking_date = document.getElementById('bookDate').value;
+      const start_time = document.getElementById('bookStartTime').value;
+      const end_time = document.getElementById('bookEndTime').value;
+
+      const res = await fetch(`${API_BASE}/bookings`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${currentUserToken}`
+        },
+        body: JSON.stringify({ ground_id, booking_date, start_time, end_time })
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        showAlert(`Бронь создана! Token приглашения: ${data.data.invite_token}`, 'success');
+        document.getElementById('appUnlockBookingId').value = data.data.id;
+        document.getElementById('inviteTokenInput').value = data.data.invite_token;
+      } else {
+        showAlert(data.message, 'error');
+      }
+    }
+
+    async function acceptInviteToken() {
+      const token = document.getElementById('inviteTokenInput').value;
+      const res = await fetch(`${API_BASE}/invitations/${token}/accept`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${currentUserToken}` }
+      });
+      const data = await res.json();
+      if (data.success) {
+        showAlert(data.message, 'success');
+      } else {
+        showAlert(data.message, 'error');
+      }
+    }
+
+    async function spontaneousQrCheckIn() {
+      const qr_code_token = document.getElementById('spontaneousQrSelect').value;
+      const res = await fetch(`${API_BASE}/grounds/qr-check-in`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${currentUserToken}`
+        },
+        body: JSON.stringify({ qr_code_token })
+      });
+      const data = await res.json();
+      if (data.success) {
+        showAlert(data.message, 'success');
+      } else {
+        showAlert(data.message, 'error');
+      }
+    }
+
+    async function unlockAppButton() {
+      const booking_id = document.getElementById('appUnlockBookingId').value;
+      const res = await fetch(`${API_BASE}/locks/unlock-button`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${currentUserToken}`
+        },
+        body: JSON.stringify({ booking_id })
+      });
+      const data = await res.json();
+      document.getElementById('lockResponseLog').innerText = JSON.stringify(data, null, 2);
+    }
+
+    async function unlockQrCode() {
+      const qr_code_token = document.getElementById('qrUnlockTokenSelect').value;
+      const res = await fetch(`${API_BASE}/locks/unlock-qr`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${currentUserToken}`
+        },
+        body: JSON.stringify({ qr_code_token })
+      });
+      const data = await res.json();
+      document.getElementById('lockResponseLog').innerText = JSON.stringify(data, null, 2);
+    }
+
+    async function loadAdminData() {
+      const res = await fetch(`${API_BASE}/admin/gateways`);
+      const data = await res.json();
+      if (!data.success) return;
+
+      const ctrl = document.getElementById('adminGatewaysControl');
+      ctrl.innerHTML = data.data.map(gw => `
+        <div style="display:flex; justify-content:space-between; align-items:center; background:rgba(255,255,255,0.05); padding:10px; border-radius:8px; margin-bottom:8px;">
+          <div><b>${gw.gateway_name}</b> (Статус: ${gw.status})</div>
+          <button class="${gw.status === 'online' ? 'btn btn-danger' : 'btn'}" style="width:auto; padding:6px 12px;" onclick="toggleGateway('${gw.id}', '${gw.status === 'online' ? 'offline' : 'online'}')">
+            Переключить в ${gw.status === 'online' ? 'ОФЛАЙН (Сбой 5G)' : 'ОНЛАЙН'}
+          </button>
+        </div>
+      `).join('');
+
+      const logRes = await fetch(`${API_BASE}/admin/lock-logs`);
+      const logData = await logRes.json();
+      if (logData.success) {
+        document.getElementById('lockAuditLogs').innerText = JSON.stringify(logData.data, null, 2);
+      }
+    }
+
+    async function toggleGateway(gateway_id, status) {
+      await fetch(`${API_BASE}/admin/gateways/toggle`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ gateway_id, status })
+      });
+      await loadGateways();
+      await loadAdminData();
+    }
+  </script>
+</body>
+</html>

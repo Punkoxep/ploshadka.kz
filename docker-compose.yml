@@ -1,0 +1,46 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: sports_ground_db
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgrespassword
+      POSTGRES_DB: sharing_ploshadka_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d sharing_ploshadka_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: sports_ground_app
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      PORT: 3000
+      DATABASE_URL: "postgresql://postgres:postgrespassword@db:5432/sharing_ploshadka_db?schema=public"
+      JWT_SECRET: "super-secret-jwt-key-sharing-ploshadka-2026"
+      JWT_EXPIRES_IN: "7d"
+      TTLOCK_CLIENT_ID: "mock_client_id"
+      TTLOCK_CLIENT_SECRET: "mock_client_secret"
+      TTLOCK_USERNAME: "admin_ttlock"
+      TTLOCK_PASSWORD_MD5: "e10adc3949ba59abbe56e057f20f883e"
+      TTLOCK_API_URL: "https://euapi.ttlock.com"
+      CRON_GATEWAY_MONITOR: "*/3 * * * *"
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
