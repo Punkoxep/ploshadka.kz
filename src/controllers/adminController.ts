@@ -1,5 +1,7 @@
 import { Request, Response } from 'express';
 import { prisma } from '../config/prisma';
+import { TTLockService } from '../services/ttlockService';
+import { ENV } from '../config/env';
 
 export class AdminController {
   /**
@@ -651,6 +653,52 @@ export class AdminController {
       });
     } catch (error: any) {
       console.error('[AdminController.banUser]', error);
+      return res.status(500).json({ success: false, message: error.message });
+    }
+  }
+
+  /**
+   * GET /api/v1/admin/ttlock-mode
+   * Get current TTLock operating mode ('mock' | 'real')
+   */
+  public static async getTTLockMode(req: Request, res: Response) {
+    try {
+      const mode = TTLockService.getMode();
+      return res.json({
+        success: true,
+        data: {
+          mode,
+          clientId: ENV.TTLOCK_CLIENT_ID,
+          apiBaseUrl: ENV.TTLOCK_API_BASE_URL,
+        },
+      });
+    } catch (error: any) {
+      return res.status(500).json({ success: false, message: error.message });
+    }
+  }
+
+  /**
+   * POST /api/v1/admin/ttlock-mode
+   * Set TTLock operating mode ('mock' | 'real')
+   */
+  public static async setTTLockMode(req: Request, res: Response) {
+    try {
+      const { mode } = req.body;
+      if (!mode || !['mock', 'real'].includes(mode)) {
+        return res.status(400).json({ success: false, message: 'Укажите режим: "mock" или "real"' });
+      }
+
+      TTLockService.setMode(mode as 'mock' | 'real');
+
+      return res.json({
+        success: true,
+        message: `Режим TTLock API изменен на "${mode === 'real' ? 'Боевой TTLock Cloud API (euapi.ttlock.com)' : 'Эмулятор (Mock)'}"`,
+        data: {
+          mode: TTLockService.getMode(),
+          apiBaseUrl: ENV.TTLOCK_API_BASE_URL,
+        },
+      });
+    } catch (error: any) {
       return res.status(500).json({ success: false, message: error.message });
     }
   }

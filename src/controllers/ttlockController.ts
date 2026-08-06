@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { prisma } from '../config/prisma';
+import { TTLockService } from '../services/ttlockService';
 
 export class TTLockController {
   /**
@@ -21,6 +22,9 @@ export class TTLockController {
       const lockId = payload.lockId || payload.lock_id;
       const gatewayId = payload.gatewayId || payload.gateway_id;
       const eventType = payload.records ? 'lock_record' : payload.status ? 'gateway_status' : 'general_notification';
+
+      // Auto-confirm presence for active booking on this ground (No-Show check)
+      await TTLockService.processCallbackUnlockRecord(payload);
 
       // Log unlock/lock activity to database audit log if lockId is present
       if (lockId) {

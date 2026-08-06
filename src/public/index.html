@@ -472,6 +472,21 @@
           </div>
         </div>
 
+        <!-- NEW: TTLock Real vs Mock Mode Switcher Banner -->
+        <div class="card" style="margin-bottom: 24px; background: linear-gradient(135deg, rgba(59, 130, 246, 0.12), rgba(16, 185, 129, 0.12)); border: 1px solid rgba(59, 130, 246, 0.35);">
+          <div class="card-title" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <span style="display: flex; align-items: center; gap: 8px; color: #fff;">🔑 Режим работы TTLock API</span>
+            <span id="ttlockModeBadge" class="status-pill status-offline" style="padding: 4px 12px; font-size: 11px;">● Загрузка...</span>
+          </div>
+          <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 14px;">
+            Переключатель режима интеграции: <b>"Эмулятор (Mock)"</b> для виртуальных тестов или <b>"Боевой TTLock API"</b> для реальной работы с замками через <code>https://euapi.ttlock.com</code>.
+          </p>
+          <div style="display: flex; gap: 12px;">
+            <button id="btnTTLockMock" class="btn" style="flex: 1; padding: 10px; font-size: 12px; background: linear-gradient(135deg, #3b82f6, #2563eb);" onclick="setTTLockOperatingMode('mock')">🧪 Эмулятор (Mock)</button>
+            <button id="btnTTLockReal" class="btn btn-secondary" style="flex: 1; padding: 10px; font-size: 12px;" onclick="setTTLockOperatingMode('real')">⚡ Боевой TTLock API (euapi.ttlock.com)</button>
+          </div>
+        </div>
+
         <div class="card" style="margin-top: 24px;">
           <div class="card-title">🚪 Симулятор гибридного входа (Разблокировка TTLock)</div>
           <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 16px;">
@@ -893,8 +908,63 @@
       await loadGateways();
       await loadOccupiedSlots();
       await loadHostRequests();
+      await loadTTLockOperatingMode();
       liveValidateIIN();
     };
+
+    async function loadTTLockOperatingMode() {
+      try {
+        const res = await fetch(`${API_BASE}/admin/ttlock-mode`);
+        const data = await res.json();
+        if (data.success) {
+          updateTTLockModeUI(data.data.mode);
+        }
+      } catch (err) {
+        console.warn('TTLock mode load error:', err);
+      }
+    }
+
+    async function setTTLockOperatingMode(mode) {
+      try {
+        const res = await fetch(`${API_BASE}/admin/ttlock-mode`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mode })
+        });
+        const data = await res.json();
+        if (data.success) {
+          showAlert(data.message, 'success');
+          updateTTLockModeUI(mode);
+        } else {
+          showAlert(data.message, 'error');
+        }
+      } catch (err) {
+        showAlert('Ошибка смены режима TTLock: ' + err.message, 'error');
+      }
+    }
+
+    function updateTTLockModeUI(mode) {
+      const badge = document.getElementById('ttlockModeBadge');
+      const btnMock = document.getElementById('btnTTLockMock');
+      const btnReal = document.getElementById('btnTTLockReal');
+
+      if (badge) {
+        badge.className = mode === 'real' ? 'status-pill status-online' : 'status-pill status-offline';
+        badge.innerHTML = mode === 'real' ? '● Боевой API (euapi.ttlock.com)' : '● Эмулятор (Mock)';
+      }
+
+      if (btnMock && btnReal) {
+        if (mode === 'real') {
+          btnMock.className = 'btn btn-secondary';
+          btnReal.className = 'btn';
+          btnReal.style.background = 'linear-gradient(135deg, #10b981, #059669)';
+        } else {
+          btnMock.className = 'btn';
+          btnMock.style.background = 'linear-gradient(135deg, #3b82f6, #2563eb)';
+          btnReal.className = 'btn btn-secondary';
+        }
+      }
+    }
 
     function renderUserPills() {
       const container = document.getElementById('usersList');

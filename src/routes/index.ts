@@ -66,6 +66,8 @@ router.get('/admin/gateways', AdminController.getGatewayStatus as any);
 router.post('/admin/gateways/toggle', AdminController.toggleGatewayStatus as any);
 router.get('/admin/lock-logs', AdminController.getLockLogs as any);
 router.get('/admin/stats', AdminController.getSystemStats as any);
+router.get('/admin/ttlock-mode', AdminController.getTTLockMode as any);
+router.post('/admin/ttlock-mode', AdminController.setTTLockMode as any);
 
 // --- Admin Analytics & Metrics Routes ---
 router.get('/analytics/akimat', AdminController.getAkimatAnalytics as any);
