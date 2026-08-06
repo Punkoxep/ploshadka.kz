@@ -142,8 +142,12 @@ export class AuthController {
         return res.status(401).json({ success: false, message: 'Пользователь не найден' });
       }
 
-      if (user.is_blocked) {
-        return res.status(403).json({ success: false, message: 'Учетная запись заблокирована администратором' });
+      if (user.is_blocked || (user.is_banned && user.banned_until && new Date(user.banned_until) > new Date())) {
+        const bannedUntilStr = user.banned_until ? new Date(user.banned_until).toLocaleString('ru-RU') : '';
+        return res.status(400).json({
+          success: false,
+          message: `Ваш аккаунт заблокирован до ${bannedUntilStr}`,
+        });
       }
 
       const isPasswordValid = await bcrypt.compare(password, user.password_hash);

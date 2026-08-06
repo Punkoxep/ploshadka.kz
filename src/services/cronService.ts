@@ -42,4 +42,16 @@ export class CronService {
       }
     });
   }
+
+  public static initNoShowAutoCheck() {
+    console.log('[CronService] Initializing Automated 60-second No-Show Auto-Ban Background Worker...');
+    setInterval(async () => {
+      try {
+        const { BookingsController } = require('../controllers/bookingsController');
+        await BookingsController.processNoShowAutoBans();
+      } catch (error: any) {
+        console.error('[CronService] Error in No-Show Background Worker:', error.message);
+      }
+    }, 60000);
+  }
 }

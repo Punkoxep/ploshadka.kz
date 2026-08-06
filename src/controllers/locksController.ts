@@ -3,6 +3,21 @@ import { prisma } from '../config/prisma';
 import { AuthenticatedRequest } from '../middlewares/authMiddleware';
 import { TTLockService } from '../services/ttlockService';
 
+function calculateDistanceMeters(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371e3; // metres
+  const φ1 = (lat1 * Math.PI) / 180;
+  const φ2 = (lat2 * Math.PI) / 180;
+  const Δφ = ((lat2 - lat1) * Math.PI) / 180;
+  const Δλ = ((lon2 - lon1) * Math.PI) / 180;
+
+  const a =
+    Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+    Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+  return R * c;
+}
+
 export class LocksController {
   /**
    * Method A: In-app Button Door Unlock
@@ -12,7 +27,7 @@ export class LocksController {
     try {
       if (!req.user) return res.status(401).json({ success: false, message: 'Не авторизован' });
 
-      const { booking_id } = req.body;
+      const { booking_id, userLatitude, user_latitude, userLongitude, user_longitude } = req.body;
 
       const now = new Date();
       const currentDateStr = now.toISOString().split('T')[0];
@@ -93,6 +108,21 @@ export class LocksController {
         });
       }
 
+      // GPS Geolocation Check (Haversine Formula)
+      const userLat = userLatitude !== undefined ? Number(userLatitude) : (user_latitude !== undefined ? Number(user_latitude) : booking.ground.latitude);
+      const userLon = userLongitude !== undefined ? Number(userLongitude) : (user_longitude !== undefined ? Number(user_longitude) : booking.ground.longitude);
+
+      const distanceMeters = calculateDistanceMeters(userLat, userLon, booking.ground.latitude, booking.ground.longitude);
+      const allowedRadius = booking.ground.allowed_radius_meters || 50;
+
+      if (distanceMeters > allowedRadius) {
+        return res.status(400).json({
+          success: false,
+          doorUnlocked: false,
+          message: `Вы находитесь слишком далеко от площадки (расстояние ${Math.round(distanceMeters)}м, требуется находиться в пределах ${allowedRadius}м)`,
+        });
+      }
+
       // Determine Gateway online status
       const gateway = booking.ground.gateways[0];
       const isGatewayOnline = gateway ? gateway.status === 'online' : true;
@@ -116,8 +146,15 @@ export class LocksController {
         },
       });
 
+      // Mark booking as door opened to prevent No-Show ban
+      await prisma.booking.update({
+        where: { id: booking.id },
+        data: { is_door_opened: true },
+      });
+
       return res.json({
         success: unlockResult.success,
+        doorUnlocked: true,
         data: {
           ...unlockResult,
           booking_id: booking.id,
@@ -204,7 +241,7 @@ export class LocksController {
     try {
       if (!req.user) return res.status(401).json({ success: false, message: 'Не авторизован' });
 
-      const { qr_code_token } = req.body;
+      const { qr_code_token, userLatitude, user_latitude, userLongitude, user_longitude } = req.body;
 
       if (!qr_code_token) {
         return res.status(400).json({ success: false, message: 'Укажите токен QR-кода двери' });
@@ -256,6 +293,21 @@ export class LocksController {
 
       // If already authorized host/guest/approved request, unlock door physically!
       if (isHost || isApprovedGuest || isApprovedJoinRequest) {
+        // GPS Geolocation Check (Haversine Formula)
+        const userLat = userLatitude !== undefined ? Number(userLatitude) : (user_latitude !== undefined ? Number(user_latitude) : ground.latitude);
+        const userLon = userLongitude !== undefined ? Number(userLongitude) : (user_longitude !== undefined ? Number(user_longitude) : ground.longitude);
+
+        const distanceMeters = calculateDistanceMeters(userLat, userLon, ground.latitude, ground.longitude);
+        const allowedRadius = ground.allowed_radius_meters || 50;
+
+        if (distanceMeters > allowedRadius) {
+          return res.status(400).json({
+            success: false,
+            doorUnlocked: false,
+            message: `Вы находитесь слишком далеко от площадки (расстояние ${Math.round(distanceMeters)}м, требуется находиться в пределах ${allowedRadius}м)`,
+          });
+        }
+
         const gateway = ground.gateways[0];
         const isGatewayOnline = gateway ? gateway.status === 'online' : true;
         const unlockResult = await TTLockService.unlockLock(ground.ttlock_lock_id, isGatewayOnline);
@@ -270,6 +322,12 @@ export class LocksController {
             success: unlockResult.success,
             details: unlockResult.message,
           },
+        });
+
+        // Mark booking as door opened
+        await prisma.booking.update({
+          where: { id: currentBooking.id },
+          data: { is_door_opened: true },
         });
 
         return res.json({

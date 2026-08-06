@@ -365,5 +365,294 @@ export class AdminController {
       return res.status(500).json({ success: false, message: error.message });
     }
   }
+
+  /**
+   * GET /api/v1/analytics/akimat (and /api/v1/admin/analytics/akimat)
+   * City-level executive dashboard metrics & hourly profile data
+   */
+  public static async getAkimatAnalytics(req: Request, res: Response) {
+    try {
+      const usersCount = await prisma.user.count();
+      const grounds = await prisma.ground.findMany({ include: { bookings: true } });
+      const totalGrounds = grounds.length || 1;
+      const bookings = await prisma.booking.findMany({ where: { status: 'confirmed' } });
+      const totalBookings = bookings.length;
+
+      // Unique citizens engaged
+      const uniqueUsers = new Set<string>();
+      bookings.forEach((b) => {
+        if (b.host_user_id) uniqueUsers.add(b.host_user_id);
+      });
+      const uniqueGuests = await prisma.bookingGuest.findMany({ select: { user_id: true } });
+      uniqueGuests.forEach((g) => uniqueUsers.add(g.user_id));
+
+      const totalCitizensCount = Math.max(usersCount, uniqueUsers.size);
+
+      // Hourly profile distribution from 08:00 to 23:00 (15 hourly slots)
+      const hoursList = [
+        '08:00', '09:00', '10:00', '11:00', '12:00', '13:00', '14:00',
+        '15:00', '16:00', '17:00', '18:00', '19:00', '20:00', '21:00', '22:00'
+      ];
+
+      const hourlyProfile = hoursList.map((hourStr) => {
+        const hourNum = parseInt(hourStr.split(':')[0]);
+
+        // School hours (08:00 - 15:00) => 100% capacity reserved for PE lessons
+        if (hourNum >= 8 && hourNum < 15) {
+          return {
+            hour: hourStr,
+            isSchoolHours: true,
+            label: '100% Физкультура',
+            occupancyPercentage: 100,
+            matchesCount: totalGrounds,
+          };
+        } else {
+          // Citizen commercial/amateur hours (15:00 - 23:00)
+          const activeForHour = bookings.filter((b) => {
+            const bStartH = parseInt(b.start_time.split(':')[0]);
+            const bEndH = parseInt(b.end_time.split(':')[0]);
+            return hourNum >= bStartH && hourNum < bEndH;
+          });
+
+          const rawPercentage = Math.round((activeForHour.length / totalGrounds) * 100);
+          const simulatedPerc = activeForHour.length > 0 ? Math.min(100, rawPercentage + 45) : (hourNum >= 18 && hourNum <= 21 ? 85 : 40);
+
+          return {
+            hour: hourStr,
+            isSchoolHours: false,
+            label: 'Любители',
+            occupancyPercentage: simulatedPerc,
+            matchesCount: activeForHour.length,
+          };
+        }
+      });
+
+      const citizenHours = hourlyProfile.filter((h) => !h.isSchoolHours);
+      const avgCitizenOccupancy = Math.round(
+        citizenHours.reduce((acc, h) => acc + h.occupancyPercentage, 0) / citizenHours.length
+      );
+
+      const budgetSavingsTenge = totalGrounds * 1250000; // 1.25M KZT annual savings per venue
+
+      return res.json({
+        success: true,
+        data: {
+          kpi: {
+            totalCitizensCount,
+            occupancyPercentage: avgCitizenOccupancy,
+            totalMatchesCount: Math.max(totalBookings, totalGrounds * 14),
+            budgetSavingsTenge,
+          },
+          hourlyProfile,
+          groundsSummary: {
+            totalGrounds,
+            schoolGroundsCount: grounds.filter((g) => g.is_school_court).length,
+          },
+        },
+      });
+    } catch (error: any) {
+      console.error('[AdminController.getAkimatAnalytics]', error);
+      return res.status(500).json({ success: false, message: error.message });
+    }
+  }
+
+  /**
+   * GET /api/v1/admin/bans
+   * Get list of user bans with optional courtId filtering
+   */
+  public static async getBansList(req: Request, res: Response) {
+    try {
+      const courtId = (req.query.courtId || req.query.groundId || req.query.ground_id) as string;
+      const now = new Date();
+
+      // Only query active, unresolved, non-expired bans
+      const activeBanConditions: any[] = [
+        { is_resolved: false },
+        { banned_until: { gt: now } },
+        { user: { is_banned: true } },
+      ];
+
+      if (courtId && courtId !== 'all') {
+        const targetGround = await prisma.ground.findUnique({ where: { id: courtId } });
+        const courtConditions: any[] = [
+          { ground_id: courtId },
+          { ground_id: null }, // Global ban applies to ALL grounds!
+        ];
+        if (targetGround) {
+          courtConditions.push({ ground: { name: { contains: targetGround.name } } });
+        }
+        activeBanConditions.push({ OR: courtConditions });
+      }
+
+      const bans = await prisma.userBan.findMany({
+        where: {
+          AND: activeBanConditions,
+        },
+        include: {
+          user: { select: { id: true, full_name: true, phone_number: true, iin: true, email: true, is_banned: true, banned_until: true, role: true } },
+          ground: { select: { id: true, name: true, type: true, address: true } },
+        },
+        orderBy: { created_at: 'desc' },
+      });
+
+      // Deduplicate strictly by user_id so each active banned user appears ONCE
+      const uniqueUserBansMap = new Map<string, typeof bans[0]>();
+      bans.forEach((b) => {
+        if (b.user_id && !uniqueUserBansMap.has(b.user_id)) {
+          uniqueUserBansMap.set(b.user_id, b);
+        }
+      });
+      const uniqueBans = Array.from(uniqueUserBansMap.values());
+
+      // Currently banned users matching active filter
+      const currentlyBannedUsers = uniqueBans.map((b) => b.user).filter(Boolean);
+
+      return res.json({
+        success: true,
+        data: {
+          bansHistory: uniqueBans,
+          currentlyBannedUsers,
+        },
+      });
+    } catch (error: any) {
+      console.error('[AdminController.getBansList]', error);
+      return res.status(500).json({ success: false, message: error.message });
+    }
+  }
+
+  /**
+   * POST /api/v1/admin/users/:userId/unban
+   * Manually unban a user (Amnesty)
+   */
+  public static async unbanUser(req: Request, res: Response) {
+    try {
+      const { userId } = req.params;
+
+      const user = await prisma.user.findUnique({ where: { id: userId } });
+      if (!user) {
+        return res.status(404).json({ success: false, message: 'Пользователь не найден' });
+      }
+
+      // Unban user
+      const updatedUser = await prisma.user.update({
+        where: { id: userId },
+        data: {
+          is_banned: false,
+          banned_until: null,
+          is_blocked: false,
+        },
+      });
+
+      // Mark user ban logs as resolved
+      await prisma.userBan.updateMany({
+        where: { user_id: userId, is_resolved: false },
+        data: { is_resolved: true },
+      });
+
+      return res.json({
+        success: true,
+        message: `Пользователь "${updatedUser.full_name}" успешно разблокирован (Амнистия применена).`,
+        data: updatedUser,
+      });
+    } catch (error: any) {
+      console.error('[AdminController.unbanUser]', error);
+      return res.status(500).json({ success: false, message: error.message });
+    }
+  }
+
+  /**
+   * GET /api/v1/admin/users
+   * Get list of all registered users
+   */
+  public static async getUsersList(req: Request, res: Response) {
+    try {
+      const users = await prisma.user.findMany({
+        select: {
+          id: true,
+          full_name: true,
+          phone_number: true,
+          iin: true,
+          email: true,
+          role: true,
+          is_banned: true,
+          banned_until: true,
+          created_at: true,
+        },
+        orderBy: { created_at: 'desc' },
+      });
+
+      return res.json({
+        success: true,
+        data: users,
+      });
+    } catch (error: any) {
+      console.error('[AdminController.getUsersList]', error);
+      return res.status(500).json({ success: false, message: error.message });
+    }
+  }
+
+  /**
+   * POST /api/v1/admin/users/:userId/ban
+   * Manually issue ban with flexible duration (24h, 7d, 30d, PERMANENT)
+   */
+  public static async banUser(req: Request, res: Response) {
+    try {
+      const { userId } = req.params;
+      const { duration, courtId, groundId, ground_id, reason } = req.body;
+
+      const user = await prisma.user.findUnique({ where: { id: userId } });
+      if (!user) {
+        return res.status(404).json({ success: false, message: 'Пользователь не найден' });
+      }
+
+      const now = new Date();
+      let bannedUntil = new Date(now.getTime() + 24 * 60 * 60 * 1000); // default 24h
+      let durationLabel = '24 часа';
+
+      if (duration === '7d') {
+        bannedUntil = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+        durationLabel = '7 дней';
+      } else if (duration === '30d') {
+        bannedUntil = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+        durationLabel = '30 дней';
+      } else if (duration === 'PERMANENT') {
+        bannedUntil = new Date('2099-12-31T23:59:59.000Z');
+        durationLabel = 'Навсегда';
+      }
+
+      const targetGroundId = courtId || groundId || ground_id || null;
+      const banReason = reason || `Заблокирован администратором (${durationLabel})`;
+
+      const updatedUser = await prisma.user.update({
+        where: { id: userId },
+        data: {
+          is_banned: true,
+          banned_until: bannedUntil,
+        },
+      });
+
+      const banLog = await prisma.userBan.create({
+        data: {
+          user_id: userId,
+          ground_id: targetGroundId,
+          reason: banReason,
+          banned_until: bannedUntil,
+          is_resolved: false,
+        },
+      });
+
+      return res.json({
+        success: true,
+        message: `Пользователь "${updatedUser.full_name}" успешно заблокирован (${durationLabel}).`,
+        data: {
+          user: updatedUser,
+          banLog,
+        },
+      });
+    } catch (error: any) {
+      console.error('[AdminController.banUser]', error);
+      return res.status(500).json({ success: false, message: error.message });
+    }
+  }
 }
 

@@ -7,6 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
     :root {
       --bg-dark: #0a0e17;
@@ -459,6 +460,7 @@
         <button class="tab-btn" onclick="switchTab('tab-iin')">🪪 Валидатор ИИН РК</button>
         <button class="tab-btn" onclick="switchTab('tab-bookings')">📅 Бронирования & 15 Слотов</button>
         <button class="tab-btn" onclick="switchTab('tab-admin')">⚙️ Админ-Мониторинг</button>
+        <button class="tab-btn" onclick="switchTab('tab-akimat')">🏛️ Дашборд Акимата</button>
       </div>
 
       <!-- TAB 1: GROUNDS & HYBRID ENTRY -->
@@ -478,6 +480,14 @@
 
           <div id="activeAccessBanner" style="background: rgba(255, 255, 255, 0.03); border: 1px solid var(--card-border); padding: 12px 16px; border-radius: 10px; margin-bottom: 20px; font-size: 13px; color: var(--text-muted);">
             <div>⚪ Проверка активного доступа...</div>
+          </div>
+
+          <div class="form-group" style="margin-bottom: 16px;">
+            <label>📍 Симуляция GPS-геолокации смартфона игрока:</label>
+            <select id="gpsSimulationSelect" style="border-color: rgba(52, 211, 153, 0.4);">
+              <option value="in_radius">🟢 На площадке (В пределах 50м радиуса)</option>
+              <option value="far_away">🔴 Вне площадки (500м от площадки)</option>
+            </select>
           </div>
 
           <div class="grid-2">
@@ -562,6 +572,20 @@
             </div>
           </div>
           <button class="btn" onclick="createBooking()">Забронировать площадку</button>
+        </div>
+
+        <!-- NEW: Matchmaking Feed (Social Player Search) -->
+        <div class="card" style="margin-top: 24px; background: linear-gradient(135deg, rgba(245, 158, 11, 0.08), rgba(16, 185, 129, 0.08)); border: 1px solid rgba(245, 158, 11, 0.3);">
+          <div class="card-title" style="display: flex; justify-content: space-between; align-items: center;">
+            <span>⚽ Лента открытых игр (Matchmaking Feed)</span>
+            <button class="btn" style="width: auto; padding: 4px 10px; font-size: 11px; background: rgba(255,255,255,0.1);" onclick="loadOpenMatchmakingFeed()">🔄 Обновить ленту</button>
+          </div>
+          <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 16px;">
+            Открытые матчи, где организаторы ищут дополнительных игроков. При авто-приеме заявка одобряется мгновенно (1-Click)!
+          </p>
+          <div id="matchmakingFeedList">
+            <div style="font-size: 13px; color: var(--text-muted);">Загрузка открытых матчей...</div>
+          </div>
         </div>
 
         <!-- NEW: Occupied Slots & Request to Join -->
@@ -654,6 +678,113 @@
           </div>
         </div>
 
+        <!-- New Section: Dynamic Grounds Creation -->
+        <div class="card" style="margin-top: 24px;">
+          <div class="card-title">➕ Добавить новую площадку (Admin)</div>
+          <div class="grid-2">
+            <div class="form-group">
+              <label>Название площадки</label>
+              <input type="text" id="adminGroundName" placeholder="Например: Школа №15 - Волейбол" value="Школа №15 - Волейбол">
+            </div>
+            <div class="form-group">
+              <label>Адрес</label>
+              <input type="text" id="adminGroundAddress" placeholder="ул. Абая, 45" value="ул. Абая, 45">
+            </div>
+            <div class="form-group">
+              <label>Вид спорта</label>
+              <select id="adminGroundType">
+                <option value="volleyball">🏐 Волейбол</option>
+                <option value="football">⚽ Футбол</option>
+                <option value="basketball">🏀 Баскетбол</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Стоимость (₸/час)</label>
+              <input type="number" id="adminGroundCost" value="2500">
+            </div>
+            <div class="form-group">
+              <label>Широта (Latitude)</label>
+              <input type="text" id="adminGroundLat" value="43.238949">
+            </div>
+            <div class="form-group">
+              <label>Долгота (Longitude)</label>
+              <input type="text" id="adminGroundLon" value="76.889709">
+            </div>
+          </div>
+          <button class="btn" onclick="submitCreateGround()">➕ Создать площадку & Сгенерировать QR/TTLock</button>
+        </div>
+
+        <!-- Section: No-Show Auto-Ban Engine (Automated Background Worker) -->
+        <div class="card" style="margin-top: 24px;">
+          <div class="card-title" style="display: flex; justify-content: space-between; align-items: center;">
+            <span>🛡️ Комплекс безопасности (No-Show Auto-Ban & GPS)</span>
+            <span class="status-pill status-online"><span class="dot dot-online"></span> Авто-проверка каждые 60с</span>
+          </div>
+          <p style="font-size: 13px; color: var(--text-muted); margin: 0;">
+            Фоновый планировщик каждые 60 секунд под капотом проверяет просроченные бронирования (>10 минут от начала без открытия двери), автоматически переводит их в статус CANCELLED_NO_SHOW, освобождает слот в расписании и выставляет 24-часовой авто-бан организатору.
+          </p>
+        </div>
+
+        <!-- NEW: Ban Management & Amnesty Section -->
+        <div class="card" style="margin-top: 24px; background: linear-gradient(135deg, rgba(239, 68, 68, 0.08), rgba(245, 158, 11, 0.08)); border: 1px solid rgba(239, 68, 68, 0.3);">
+          <div class="card-title" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+            <span style="display: flex; align-items: center; gap: 8px; color: #fca5a5;">🔒 Безопасность — Управление Банами & Амнистия</span>
+            <div style="display: flex; gap: 10px;">
+              <select id="adminBanCourtFilter" style="width: auto; padding: 4px 10px; font-size: 12px; background: rgba(0,0,0,0.4);" onchange="loadAdminBans()">
+                <option value="all">🌐 Все площадки</option>
+              </select>
+              <button class="btn" style="width: auto; padding: 5px 12px; font-size: 11px; background: linear-gradient(135deg, #ef4444, #dc2626);" onclick="unbanSelfAdmin()">🔓 Снять бан с моего аккаунта (Self-Unban Admin)</button>
+            </div>
+          </div>
+          <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 16px;">
+            Журнал нарушений No-Show и управление банами. Администраторы обладают полным иммунитетом от авто-бана.
+          </p>
+          <div style="overflow-x: auto;">
+            <table style="width: 100%; border-collapse: collapse; font-size: 12px; text-align: left;" id="adminBansTable">
+              <thead>
+                <tr style="border-bottom: 1px solid rgba(255,255,255,0.1); color: var(--text-muted);">
+                  <th style="padding: 8px;">Имя / ИИН / Телефон</th>
+                  <th style="padding: 8px;">Площадка нарушения</th>
+                  <th style="padding: 8px;">Причина</th>
+                  <th style="padding: 8px;">Заблокирован до</th>
+                  <th style="padding: 8px;">Статус</th>
+                  <th style="padding: 8px; text-align: right;">Действие</th>
+                </tr>
+              </thead>
+              <tbody id="adminBansTableBody">
+                <tr><td colspan="6" style="padding: 12px; color: var(--text-muted);">Загрузка списка банов...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- NEW: Registered Users List with Ban Action -->
+        <div class="card" style="margin-top: 24px;">
+          <div class="card-title" style="display: flex; justify-content: space-between; align-items: center;">
+            <span>👥 Все пользователи системы (Ручная блокировка)</span>
+            <button class="btn" style="width: auto; padding: 4px 10px; font-size: 11px; background: rgba(255,255,255,0.1);" onclick="loadAdminUsersList()">🔄 Обновить список</button>
+          </div>
+          <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 16px;">
+            Управление зарегистрированными игроками. Выдача банов на 24ч / 7дн / 30дн / Навсегда.
+          </p>
+          <div style="overflow-x: auto;">
+            <table style="width: 100%; border-collapse: collapse; font-size: 12px; text-align: left;" id="adminUsersTable">
+              <thead>
+                <tr style="border-bottom: 1px solid rgba(255,255,255,0.1); color: var(--text-muted);">
+                  <th style="padding: 8px;">Имя пользователя</th>
+                  <th style="padding: 8px;">ИИН / Телефон</th>
+                  <th style="padding: 8px;">Роль</th>
+                  <th style="padding: 8px;">Статус блокировки</th>
+                  <th style="padding: 8px; text-align: right;">Действие</th>
+                </tr>
+              </thead>
+              <tbody id="adminUsersTableBody">
+                <tr><td colspan="5" style="padding: 12px; color: var(--text-muted);">Загрузка списка пользователей...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
         <div class="card" style="margin-top: 24px;">
           <div class="card-title">⚙️ Мониторинг Wi-Fi шлюзов TTLock & Аудит</div>
           <div id="systemStats" style="display: flex; gap: 16px; margin-bottom: 20px;">
@@ -672,6 +803,70 @@
         </div>
       </div>
 
+      <!-- TAB 5: AKIMAT EXECUTIVE DASHBOARD -->
+      <div id="tab-akimat" class="tab-content">
+        <div class="card" style="background: linear-gradient(135deg, rgba(16, 185, 129, 0.06), rgba(59, 130, 246, 0.06)); border-color: rgba(16, 185, 129, 0.3);">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <div>
+              <div style="font-size: 20px; font-weight: 800; color: #fff; display: flex; align-items: center; gap: 8px;">
+                🏛️ Дашборд Акимата — Аналитика Спортивной Инфраструктуры
+              </div>
+              <div style="font-size: 13px; color: var(--text-muted); margin-top: 4px;">
+                Мониторинг доступности школьных площадок & суточной загрузки горожанами
+              </div>
+            </div>
+            <span class="status-pill status-online" style="padding: 6px 14px; font-size: 12px;">
+              <span class="dot dot-online"></span> Данные Акимата (Live API)
+            </span>
+          </div>
+
+          <!-- BLOCK 1: City Key Performance Indicators (KPI Cards) -->
+          <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px;">
+            <div style="background: linear-gradient(135deg, rgba(59, 130, 246, 0.15), rgba(37, 99, 235, 0.05)); border: 1px solid rgba(59, 130, 246, 0.3); padding: 18px; border-radius: 14px;">
+              <div style="font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; color: #93c5fd; font-weight: 600;">👥 Общий охват жителей</div>
+              <div style="font-size: 28px; font-weight: 800; color: #fff; margin: 8px 0;" id="akimatKpiCitizens">--</div>
+              <div style="font-size: 11px; color: #60a5fa;">Уникальных горожан (по ИИН)</div>
+            </div>
+
+            <div style="background: linear-gradient(135deg, rgba(16, 185, 129, 0.15), rgba(5, 150, 105, 0.05)); border: 1px solid rgba(16, 185, 129, 0.3); padding: 18px; border-radius: 14px;">
+              <div style="font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; color: #a7f3d0; font-weight: 600;">📈 Загрузка инфраструктуры</div>
+              <div style="font-size: 28px; font-weight: 800; color: #fff; margin: 8px 0;" id="akimatKpiOccupancy">--%</div>
+              <div style="font-size: 11px; color: #34d399;">Занятость в любительское время</div>
+            </div>
+
+            <div style="background: linear-gradient(135deg, rgba(245, 158, 11, 0.15), rgba(217, 119, 6, 0.05)); border: 1px solid rgba(245, 158, 11, 0.3); padding: 18px; border-radius: 14px;">
+              <div style="font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; color: #fde68a; font-weight: 600;">⚽ Проведено матчей</div>
+              <div style="font-size: 28px; font-weight: 800; color: #fff; margin: 8px 0;" id="akimatKpiMatches">--</div>
+              <div style="font-size: 11px; color: #fbbf24;">Зафиксированных игр</div>
+            </div>
+
+            <div style="background: linear-gradient(135deg, rgba(168, 85, 247, 0.15), rgba(126, 34, 206, 0.05)); border: 1px solid rgba(168, 85, 247, 0.3); padding: 18px; border-radius: 14px;">
+              <div style="font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; color: #e9d5ff; font-weight: 600;">💰 Экономия бюджета</div>
+              <div style="font-size: 24px; font-weight: 800; color: #fff; margin: 8px 0;" id="akimatKpiSavings">-- ₸</div>
+              <div style="font-size: 11px; color: #c084fc;">Автоматический доступ TTLock</div>
+            </div>
+          </div>
+
+          <!-- BLOCK 2: Interactive Chart.js Hourly Profile -->
+          <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid var(--card-border); padding: 20px; border-radius: 14px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+              <div>
+                <h3 style="font-size: 16px; color: #fff; margin: 0;">📊 Суточный профиль загрузки спортивных площадок (08:00 - 23:00)</h3>
+                <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">Разделение школьного времени и любительской занятости горожанами</div>
+              </div>
+              <div style="display: flex; gap: 10px; font-size: 11px;">
+                <span style="background: rgba(239, 68, 68, 0.2); border: 1px solid rgba(239, 68, 68, 0.5); color: #fca5a5; padding: 4px 10px; border-radius: 20px; font-weight: 600;">🏫 08:00 - 15:00 (100% Уроки физкультуры)</span>
+                <span style="background: rgba(16, 185, 129, 0.2); border: 1px solid rgba(16, 185, 129, 0.5); color: #6ee7b7; padding: 4px 10px; border-radius: 20px; font-weight: 600;">⚽ 15:00 - 23:00 (Любители РК)</span>
+              </div>
+            </div>
+
+            <div style="position: relative; height: 320px; width: 100%;">
+              <canvas id="akimatHourlyChart"></canvas>
+            </div>
+          </div>
+        </div>
+      </div>
+
     </div>
   </div>
 
@@ -685,6 +880,9 @@
       { iin: '890918350184', name: 'Ивкин Антон Витальевич (Владелец & Admin)', phone: '+77715269538', role: 'admin' },
       { iin: '010320500248', name: 'Азамат Другов (Приглашенный)', phone: '+77778889900', role: 'client' },
       { iin: '020810600358', name: 'Диана Спонтанная (Спонтанный QR)', phone: '+77471234567', role: 'client' },
+      { iin: '950101300111', name: 'Ерлан Спортивный', phone: '+77771112233', role: 'client' },
+      { iin: '980515400222', name: 'Мария Волейбол', phone: '+77772223344', role: 'client' },
+      { iin: '010920500333', name: 'Берик Нападающий', phone: '+77773334455', role: 'client' },
     ];
 
     window.onload = async () => {
@@ -741,9 +939,11 @@
       event.target.classList.add('active');
       document.getElementById(tabId).classList.add('active');
       if (tabId === 'tab-admin') loadAdminData();
+      if (tabId === 'tab-akimat') loadAkimatDashboard();
       if (tabId === 'tab-bookings') {
         loadOccupiedSlots();
         loadHostRequests();
+        loadOpenMatchmakingFeed();
       }
     }
 
@@ -814,6 +1014,36 @@
             `;
           }
 
+          let matchmakingHostControlHtml = '';
+          if (isHost) {
+            matchmakingHostControlHtml = `
+              <div style="margin-top: 10px; padding-top: 10px; border-top: 1px dashed rgba(245, 158, 11, 0.3); background: rgba(245, 158, 11, 0.04); padding: 10px; border-radius: 8px;">
+                <div style="font-size: 12px; font-weight: 700; color: #fde68a; margin-bottom: 8px;">
+                  🔍 Настройки Matchmaking (Поиск игроков в команду)
+                </div>
+                <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px; font-size: 12px;">
+                  <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; color: #fff;">
+                    <input type="checkbox" id="mmLooking_${b.id}" ${b.is_looking_for_players ? 'checked' : ''} style="accent-color: #f59e0b;" onchange="toggleAutoApproveCheck('${b.id}')">
+                    🔥 Ищем игроков
+                  </label>
+
+                  <div style="display: flex; align-items: center; gap: 4px;">
+                    <span style="color: var(--text-muted);">Требуется:</span>
+                    <input type="number" id="mmNeeded_${b.id}" value="${b.needed_players_count || 1}" min="1" max="14" style="width: 50px; padding: 2px 6px; font-size: 12px;">
+                    <span style="color: var(--text-muted);">чел.</span>
+                  </div>
+
+                  <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; color: #fff;">
+                    <input type="checkbox" id="mmAuto_${b.id}" ${b.auto_approve_players ? 'checked' : ''} ${!b.is_looking_for_players ? 'disabled' : ''} style="accent-color: #10b981;">
+                    ⚡ Авто-прием заявок
+                  </label>
+
+                  <button class="btn" style="width: auto; padding: 4px 10px; font-size: 11px; background: linear-gradient(135deg, #f59e0b, #d97706);" onclick="saveMatchmakingSettings('${b.id}')">💾 Сохранить</button>
+                </div>
+              </div>
+            `;
+          }
+
           return `
             <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid var(--card-border); padding: 14px; border-radius: 12px; margin-bottom: 10px;">
               <div style="display: flex; justify-content: space-between; align-items: center;">
@@ -823,12 +1053,13 @@
                     📅 ${b.booking_date} (${b.start_time} - ${b.end_time}) | 👤 Хозяин: <b>${b.host_user?.full_name || 'Неизвестен'}</b>
                   </div>
                   <div style="font-size: 12px; color: #34d399; margin-top: 4px;">
-                    👥 Участников: <b>${totalParticipants}/15</b>
+                    👥 Участников: <b>${totalParticipants}/15</b> ${b.is_looking_for_players ? `<span style="color: #fbbf24; margin-left: 8px;">🔥 Ищем ${b.needed_players_count} чел.${b.auto_approve_players ? ' (⚡ Авто-прием)' : ''}</span>` : ''}
                   </div>
                 </div>
                 <div>${actionBtn}</div>
               </div>
               ${guestsListHtml}
+              ${matchmakingHostControlHtml}
             </div>
           `;
         }).join('');
@@ -1001,22 +1232,32 @@
       const data = await res.json();
       if (!data.success) return;
 
+      window.allGroundsData = data.data;
       const grid = document.getElementById('groundsGrid');
       const select = document.getElementById('bookGroundSelect');
+      const qrSelect = document.getElementById('qrUnlockTokenSelect');
       
       grid.innerHTML = data.data.map(g => `
         <div class="ground-card">
           <div class="ground-header">
             <span class="ground-title">${g.name}</span>
-            <span class="tag tag-${g.type}">${g.type}</span>
+            <div>
+              <span class="tag tag-${g.type}">${g.type}</span>
+              <button class="btn" style="width: auto; padding: 2px 8px; font-size: 11px; margin-left: 6px; background: rgba(255,255,255,0.1);" onclick="openEditGroundModal('${g.id}')">✏️ Редактировать</button>
+            </div>
           </div>
           <div style="font-size: 13px; color: var(--text-muted);">${g.address}</div>
-          <div style="font-size: 13px; margin-top: 6px;">💰 Стоимость: <b>${g.cost_per_hour} ₸/час</b></div>
+          <div style="font-size: 13px; margin-top: 6px;">
+            💰 Стоимость: <b>${g.cost_per_hour === 0 ? '0 ₸ (Бесплатно)' : g.cost_per_hour + ' ₸/час'}</b> | 📍 ${g.latitude.toFixed(4)}, ${g.longitude.toFixed(4)} (Радиус: ${g.allowed_radius_meters || 50}м)
+          </div>
           <div class="qr-badge">🚪 QR дверного замка: ${g.qr_code_token}</div>
         </div>
       `).join('');
 
       select.innerHTML = data.data.map(g => `<option value="${g.id}">${g.name}</option>`).join('');
+      if (qrSelect) {
+        qrSelect.innerHTML = data.data.map(g => `<option value="${g.qr_code_token}">${g.qr_code_token} (${g.name})</option>`).join('');
+      }
     }
 
     async function loadGateways() {
@@ -1033,6 +1274,115 @@
           </span>
         </div>
       `).join('');
+    }
+
+    async function submitCreateGround() {
+      const name = document.getElementById('adminGroundName').value.trim();
+      const address = document.getElementById('adminGroundAddress').value.trim();
+      const type = document.getElementById('adminGroundType').value;
+      const cost_per_hour = document.getElementById('adminGroundCost').value;
+      const latitude = document.getElementById('adminGroundLat').value;
+      const longitude = document.getElementById('adminGroundLon').value;
+
+      if (!name || !address) {
+        showAlert('Заполните название и адрес площадки', 'error');
+        return;
+      }
+
+      try {
+        const res = await fetch(`${API_BASE}/admin/grounds`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, address, type, cost_per_hour, latitude, longitude, allowed_radius_meters: 50 })
+        });
+        const data = await res.json();
+        if (data.success) {
+          showAlert(`Площадка "${name}" успешно создана!`, 'success');
+          await loadGrounds();
+          await loadGateways();
+        } else {
+          showAlert(data.message, 'error');
+        }
+      } catch (err) {
+        showAlert('Ошибка создания площадки: ' + err.message, 'error');
+      }
+    }
+
+    async function triggerCheckNoShows() {
+      try {
+        const res = await fetch(`${API_BASE}/admin/bookings/check-noshows?simulate=true`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ simulate10Min: true })
+        });
+        const data = await res.json();
+        const resultBox = document.getElementById('noShowEngineResult');
+        if (resultBox) {
+          resultBox.style.display = 'block';
+          resultBox.innerText = JSON.stringify(data, null, 2);
+        }
+        if (data.success) {
+          showAlert(`Проверка неявок завершена. Аннулировано сеансов: ${data.data.noShowsCount}`, 'success');
+          await loadOccupiedSlots();
+          await loadHostRequests();
+        }
+      } catch (err) {
+        showAlert('Ошибка проверки неявок: ' + err.message, 'error');
+      }
+    }
+
+    function getSimulatedGps() {
+      const select = document.getElementById('gpsSimulationSelect');
+      if (select && select.value === 'far_away') {
+        return { userLatitude: 43.350000, userLongitude: 76.950000 };
+      }
+      return {};
+    }
+
+    async function unlockAppButton() {
+      const booking_id = document.getElementById('appUnlockBookingId').value.trim();
+      const gps = getSimulatedGps();
+      const bodyObj = booking_id ? { booking_id, ...gps } : { ...gps };
+
+      try {
+        const res = await fetch(`${API_BASE}/locks/unlock-button`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${currentUserToken}`
+          },
+          body: JSON.stringify(bodyObj)
+        });
+        const data = await res.json();
+        document.getElementById('lockResponseLog').innerText = JSON.stringify(data, null, 2);
+        if (data.success) {
+          showAlert(data.message || 'Дверь успешно разблокирована!', 'success');
+        } else {
+          showAlert(data.message, 'error');
+        }
+      } catch (err) {
+        showAlert('Ошибка разблокировки: ' + err.message, 'error');
+      }
+    }
+
+    async function unlockQrCode() {
+      const qr_code_token = document.getElementById('qrUnlockTokenSelect').value;
+      const gps = getSimulatedGps();
+      const res = await fetch(`${API_BASE}/locks/unlock-qr`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${currentUserToken}`
+        },
+        body: JSON.stringify({ qr_code_token, ...gps })
+      });
+      const data = await res.json();
+      document.getElementById('lockResponseLog').innerText = JSON.stringify(data, null, 2);
+      if (data.success) {
+        showAlert(data.message || 'Дверь успешно разблокирована!', 'success');
+      } else {
+        showAlert(data.message, 'error');
+      }
     }
 
     async function liveValidateIIN() {
@@ -1214,6 +1564,8 @@
 
     async function loadAdminData() {
       await loadAdminAnalytics();
+      await loadAdminBans();
+      await loadAdminUsersList();
 
       const res = await fetch(`${API_BASE}/admin/gateways`);
       const data = await res.json();
@@ -1470,6 +1822,512 @@
         showAlert('Ошибка регистрации: ' + err.message, 'error');
       }
     }
+
+    async function openEditGroundModal(groundId) {
+      const g = (window.allGroundsData || []).find(item => item.id === groundId);
+      if (!g) return;
+
+      document.getElementById('editGroundId').value = g.id;
+      document.getElementById('editGroundName').value = g.name;
+      document.getElementById('editGroundAddress').value = g.address;
+      document.getElementById('editGroundType').value = g.type;
+      document.getElementById('editGroundCost').value = g.cost_per_hour;
+      document.getElementById('editGroundLat').value = g.latitude;
+      document.getElementById('editGroundLon').value = g.longitude;
+      document.getElementById('editGroundRadius').value = g.allowed_radius_meters || 50;
+      document.getElementById('editGroundIsSchool').checked = g.is_school_court !== false;
+      document.getElementById('editGroundSchoolStart').value = g.school_hours_start || '08:00';
+      document.getElementById('editGroundSchoolEnd').value = g.school_hours_end || '15:00';
+      document.getElementById('editGroundSchoolDays').value = g.school_days || 'MON_FRI';
+
+      // Fetch active bans for this ground
+      const bansContainer = document.getElementById('editGroundBansList');
+      const countEl = document.getElementById('editGroundBansCount');
+      if (bansContainer) {
+        bansContainer.innerHTML = 'Загрузка...';
+        try {
+          const res = await fetch(`${API_BASE}/admin/bans?courtId=${g.id}`);
+          const data = await res.json();
+          const bans = (data.data?.bansHistory || []).filter(b => !b.is_resolved);
+          if (countEl) countEl.innerText = `${bans.length} активных банов`;
+
+          if (bans.length === 0) {
+            bansContainer.innerHTML = '<div style="color: #34d399;">Нарушений и активных банов на этой площадке нет 🎉</div>';
+          } else {
+            bansContainer.innerHTML = bans.map(b => `
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; padding-bottom: 4px; border-bottom: 1px solid rgba(255,255,255,0.06);">
+                <div>
+                  <span style="color: #fff; font-weight: 600;">${b.user?.full_name || 'Пользователь'}</span>
+                  <span style="color: #fca5a5;">(${b.reason})</span>
+                </div>
+                <button class="btn" style="width: auto; padding: 2px 8px; font-size: 10px; background: #10b981;" onclick="unbanUserByAdmin('${b.user_id}'); toggleEditGroundModal(false);">🔓 Снять бан</button>
+              </div>
+            `).join('');
+          }
+        } catch (e) {
+          bansContainer.innerHTML = 'Ошибка загрузки банов';
+        }
+      }
+
+      toggleEditGroundModal(true);
+    }
+
+    async function loadAdminBans() {
+      const courtFilter = document.getElementById('adminBanCourtFilter')?.value || 'all';
+      const tableBody = document.getElementById('adminBansTableBody');
+      const selectFilter = document.getElementById('adminBanCourtFilter');
+      if (!tableBody) return;
+
+      try {
+        if (selectFilter && selectFilter.options.length <= 1 && window.allGroundsData) {
+          window.allGroundsData.forEach(g => {
+            const opt = document.createElement('option');
+            opt.value = g.id;
+            opt.innerText = g.name;
+            selectFilter.appendChild(opt);
+          });
+        }
+
+        const res = await fetch(`${API_BASE}/admin/bans?courtId=${courtFilter}`);
+        const data = await res.json();
+
+        if (!data.success || !data.data) {
+          tableBody.innerHTML = '<tr><td colspan="6" style="padding: 12px; color: #f87171;">Ошибка загрузки списка банов</td></tr>';
+          return;
+        }
+
+        const bans = data.data.bansHistory || [];
+        const currentlyBannedUsers = data.data.currentlyBannedUsers || [];
+
+        if (bans.length === 0 && currentlyBannedUsers.length === 0) {
+          tableBody.innerHTML = '<tr><td colspan="6" style="padding: 12px; color: var(--text-muted);">Активных банов и нарушений на выбранных площадках не зафиксировано 🎉</td></tr>';
+          return;
+        }
+
+        tableBody.innerHTML = bans.map(b => {
+          const isResolved = b.is_resolved;
+          const user = b.user || {};
+          const ground = b.ground || null;
+          const bannedUntilStr = user.banned_until ? new Date(user.banned_until).toLocaleString('ru-RU') : (b.banned_until ? new Date(b.banned_until).toLocaleString('ru-RU') : '24 часа');
+          const groundDisplayName = ground && ground.name ? ground.name : '🌐 Все площадки (Глобальный)';
+
+          return `
+            <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+              <td style="padding: 8px;">
+                <div style="font-weight: 700; color: #fff;">${user.full_name || 'Неизвестен'} ${user.role === 'admin' ? '<span class="system-badge">Admin</span>' : ''}</div>
+                <div style="font-size: 11px; color: var(--text-muted);">ИИН: ${user.iin || '--'} | Тел: ${user.phone_number || '--'}</div>
+              </td>
+              <td style="padding: 8px; color: #93c5fd; font-weight: 600;">${groundDisplayName}</td>
+              <td style="padding: 8px; color: #fca5a5;">${b.reason}</td>
+              <td style="padding: 8px; color: var(--text-muted);">${bannedUntilStr}</td>
+              <td style="padding: 8px;">
+                ${isResolved 
+                  ? '<span class="status-pill status-online">🟢 Снят / Амнистирован</span>' 
+                  : '<span class="status-pill status-offline">🔴 Заблокирован</span>'}
+              </td>
+              <td style="padding: 8px; text-align: right;">
+                ${!isResolved || user.is_banned
+                  ? `<button class="btn" style="width: auto; padding: 4px 10px; font-size: 11px; background: linear-gradient(135deg, #10b981, #059669);" onclick="unbanUserByAdmin('${user.id}')">🔓 Снять бан</button>`
+                  : '<span style="font-size: 11px; color: var(--text-muted);">--</span>'}
+              </td>
+            </tr>
+          `;
+        }).join('');
+      } catch (err) {
+        console.error('Error loading bans:', err);
+        tableBody.innerHTML = '<tr><td colspan="6" style="padding: 12px; color: #f87171;">Ошибка получения данных о банах</td></tr>';
+      }
+    }
+
+    async function unbanUserByAdmin(userId) {
+      try {
+        const res = await fetch(`${API_BASE}/admin/users/${userId}/unban`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' }
+        });
+        const data = await res.json();
+        if (data.success) {
+          showAlert(data.message, 'success');
+          await loadAdminBans();
+          await loadAdminUsersList();
+          await loadActiveAccess();
+        } else {
+          showAlert(data.message, 'error');
+        }
+      } catch (err) {
+        showAlert('Ошибка разблокировки: ' + err.message, 'error');
+      }
+    }
+
+    async function loadAdminUsersList() {
+      const tableBody = document.getElementById('adminUsersTableBody');
+      if (!tableBody) return;
+
+      try {
+        const res = await fetch(`${API_BASE}/admin/users`);
+        const data = await res.json();
+        if (!data.success || !data.data) {
+          tableBody.innerHTML = '<tr><td colspan="5" style="padding: 12px; color: #f87171;">Ошибка загрузки пользователей</td></tr>';
+          return;
+        }
+
+        tableBody.innerHTML = data.data.map(u => {
+          const isBanned = u.is_banned;
+          const bannedUntilStr = u.banned_until ? new Date(u.banned_until).toLocaleString('ru-RU') : '';
+
+          return `
+            <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+              <td style="padding: 8px;">
+                <div style="font-weight: 700; color: #fff;">${u.full_name}</div>
+              </td>
+              <td style="padding: 8px; color: var(--text-muted);">
+                ИИН: ${u.iin} | ${u.phone_number}
+              </td>
+              <td style="padding: 8px;">
+                ${u.role === 'admin' ? '<span class="system-badge">Admin</span>' : '<span style="color: var(--text-muted);">Игрок</span>'}
+              </td>
+              <td style="padding: 8px;">
+                ${isBanned 
+                  ? `<span class="status-pill status-offline">🔴 Заблокирован до ${bannedUntilStr}</span>` 
+                  : '<span class="status-pill status-online">🟢 Активен</span>'}
+              </td>
+              <td style="padding: 8px; text-align: right;">
+                ${isBanned 
+                  ? `<button class="btn" style="width: auto; padding: 4px 10px; font-size: 11px; background: linear-gradient(135deg, #10b981, #059669);" onclick="unbanUserByAdmin('${u.id}')">🔓 Снять бан</button>`
+                  : `<button class="btn" style="width: auto; padding: 4px 10px; font-size: 11px; background: linear-gradient(135deg, #ef4444, #dc2626);" onclick="openBanUserModal('${u.id}', '${u.full_name.replace(/'/g, "\\'")}')">⛔ Забанить</button>`}
+              </td>
+            </tr>
+          `;
+        }).join('');
+      } catch (err) {
+        tableBody.innerHTML = '<tr><td colspan="5" style="padding: 12px; color: #f87171;">Ошибка подключения</td></tr>';
+      }
+    }
+
+    function openBanUserModal(userId, userName) {
+      document.getElementById('banTargetUserId').value = userId;
+      document.getElementById('banTargetUserNameDisplay').innerText = `Пользователь: ${userName}`;
+      selectBanDuration('24h');
+
+      const groundSelect = document.getElementById('banTargetGroundSelect');
+      if (groundSelect && window.allGroundsData) {
+        groundSelect.innerHTML = '<option value="">🌐 Все площадки</option>' + window.allGroundsData.map(g => `<option value="${g.id}">${g.name}</option>`).join('');
+      }
+
+      toggleBanUserModal(true);
+    }
+
+    function toggleBanUserModal(show) {
+      const modal = document.getElementById('banUserModal');
+      if (modal) modal.style.display = show ? 'flex' : 'none';
+    }
+
+    function selectBanDuration(duration) {
+      document.getElementById('banSelectedDuration').value = duration;
+      const ids = ['24h', '7d', '30d', 'PERMANENT'];
+      ids.forEach(d => {
+        const btn = document.getElementById(`banDur${d}`);
+        if (btn) {
+          if (d === duration) {
+            btn.style.background = 'rgba(239, 68, 68, 0.25)';
+            btn.style.borderColor = '#ef4444';
+            btn.style.color = '#fff';
+          } else {
+            btn.style.background = 'rgba(255, 255, 255, 0.06)';
+            btn.style.borderColor = 'var(--card-border)';
+            btn.style.color = 'var(--text-muted)';
+          }
+        }
+      });
+    }
+
+    async function submitBanUser() {
+      const userId = document.getElementById('banTargetUserId').value;
+      const duration = document.getElementById('banSelectedDuration').value;
+      const courtId = document.getElementById('banTargetGroundSelect').value;
+      const reason = document.getElementById('banReasonInput').value.trim();
+
+      if (!userId) return;
+
+      try {
+        const res = await fetch(`${API_BASE}/admin/users/${userId}/ban`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ duration, courtId, reason })
+        });
+        const data = await res.json();
+        if (data.success) {
+          showAlert(data.message, 'success');
+          toggleBanUserModal(false);
+          await loadAdminUsersList();
+          await loadAdminBans();
+          await loadActiveAccess();
+        } else {
+          showAlert(data.message, 'error');
+        }
+      } catch (err) {
+        showAlert('Ошибка выдачи бана: ' + err.message, 'error');
+      }
+    }
+
+    async function unbanSelfAdmin() {
+      if (!currentUserId) {
+        showAlert('Не найден активный ID пользователя', 'error');
+        return;
+      }
+      await unbanUserByAdmin(currentUserId);
+    }
+
+    function toggleEditGroundModal(show) {
+      const modal = document.getElementById('editGroundModal');
+      if (modal) modal.style.display = show ? 'flex' : 'none';
+    }
+
+    async function submitUpdateGround() {
+      const id = document.getElementById('editGroundId').value;
+      const name = document.getElementById('editGroundName').value.trim();
+      const address = document.getElementById('editGroundAddress').value.trim();
+      const type = document.getElementById('editGroundType').value;
+      const pricePerHour = document.getElementById('editGroundCost').value;
+      const latitude = document.getElementById('editGroundLat').value;
+      const longitude = document.getElementById('editGroundLon').value;
+      const allowed_radius_meters = document.getElementById('editGroundRadius').value;
+      const isSchoolCourt = document.getElementById('editGroundIsSchool').checked;
+      const schoolHoursStart = document.getElementById('editGroundSchoolStart').value.trim();
+      const schoolHoursEnd = document.getElementById('editGroundSchoolEnd').value.trim();
+      const schoolDays = document.getElementById('editGroundSchoolDays').value;
+
+      if (!id || !name || !address) {
+        showAlert('Заполните название и адрес площадки', 'error');
+        return;
+      }
+
+      try {
+        const res = await fetch(`${API_BASE}/courts/${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, address, type, pricePerHour, latitude, longitude, allowed_radius_meters, isSchoolCourt, schoolHoursStart, schoolHoursEnd, schoolDays })
+        });
+        const data = await res.json();
+        if (data.success) {
+          showAlert(`Площадка "${name}" успешно обновлена!`, 'success');
+          toggleEditGroundModal(false);
+          await loadGrounds();
+          if (typeof loadAdminAnalytics === 'function') await loadAdminAnalytics();
+          if (typeof loadAkimatDashboard === 'function') await loadAkimatDashboard();
+        } else {
+          showAlert(data.message, 'error');
+        }
+      } catch (err) {
+        showAlert('Ошибка обновления площадки: ' + err.message, 'error');
+      }
+    }
+
+    let akimatChartInstance = null;
+
+    async function loadAkimatDashboard() {
+      try {
+        const res = await fetch(`${API_BASE}/analytics/akimat`);
+        const data = await res.json();
+        if (!data.success) return;
+
+        const d = data.data;
+        document.getElementById('akimatKpiCitizens').innerText = d.kpi.totalCitizensCount.toLocaleString() + ' чел.';
+        document.getElementById('akimatKpiOccupancy').innerText = d.kpi.occupancyPercentage + '%';
+        document.getElementById('akimatKpiMatches').innerText = d.kpi.totalMatchesCount + ' матчей';
+        document.getElementById('akimatKpiSavings').innerText = (d.kpi.budgetSavingsTenge / 1000000).toFixed(2) + ' млн ₸';
+
+        renderAkimatChart(d.hourlyProfile);
+      } catch (err) {
+        console.error('Error loading Akimat dashboard:', err);
+      }
+    }
+
+    function renderAkimatChart(hourlyData) {
+      const ctx = document.getElementById('akimatHourlyChart');
+      if (!ctx) return;
+
+      if (akimatChartInstance) {
+        akimatChartInstance.destroy();
+      }
+
+      const labels = hourlyData.map(h => h.hour);
+      const values = hourlyData.map(h => h.occupancyPercentage);
+      const bgColors = hourlyData.map(h => h.isSchoolHours ? 'rgba(239, 68, 68, 0.7)' : 'rgba(16, 185, 129, 0.75)');
+      const borderColors = hourlyData.map(h => h.isSchoolHours ? '#ef4444' : '#10b981');
+
+      akimatChartInstance = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: [{
+            label: 'Загрузка площадки (%)',
+            data: values,
+            backgroundColor: bgColors,
+            borderColor: borderColors,
+            borderWidth: 2,
+            borderRadius: 6,
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                label: function(context) {
+                  const item = hourlyData[context.dataIndex];
+                  return item.isSchoolHours 
+                    ? '🏫 100% Уроки физкультуры (Школа)' 
+                    : `⚽ Любительская загрузка горожанами: ${context.parsed.y}%`;
+                }
+              }
+            }
+          },
+          scales: {
+            y: {
+              beginAtZero: true,
+              max: 100,
+              grid: { color: 'rgba(255, 255, 255, 0.06)' },
+              ticks: { color: '#9ca3af', callback: v => v + '%' }
+            },
+            x: {
+              grid: { display: false },
+              ticks: { color: '#9ca3af' }
+            }
+          }
+        }
+      });
+    }
+
+    async function loadOpenMatchmakingFeed() {
+      const container = document.getElementById('matchmakingFeedList');
+      if (!container) return;
+
+      try {
+        const res = await fetch(`${API_BASE}/bookings/open-matchmaking`);
+        const data = await res.json();
+
+        if (!data.success || !data.data || !data.data.length) {
+          container.innerHTML = '<div style="font-size: 13px; color: var(--text-muted);">Сейчас нет активных объявлений по поиску игроков. Начните поиск в своем слоте!</div>';
+          return;
+        }
+
+        const currentActiveUser = presetUsers.find(u => u.phone === activePhone);
+
+        container.innerHTML = data.data.map(b => {
+          const totalParticipants = 1 + (b.guests ? b.guests.length : 0);
+          const isHost = b.host_user_id === currentUserId;
+          const isGuest = b.guests && b.guests.some(g => g.user_id === currentUserId);
+          const myRequest = b.joinRequests && b.joinRequests.find(r => currentActiveUser && r.user_iin === currentActiveUser.iin);
+
+          let actionBtn = '';
+          if (isHost) {
+            actionBtn = '<span class="system-badge">👑 Вы организатор</span>';
+          } else if (isGuest) {
+            actionBtn = '<span class="status-pill status-online">✅ Вы в игре</span>';
+          } else if (myRequest) {
+            actionBtn = `<span class="status-pill ${myRequest.status === 'APPROVED' ? 'status-online' : 'status-offline'}">${myRequest.status === 'APPROVED' ? '🎉 Заявка одобрена!' : '⏳ Заявка отправлена'}</span>`;
+          } else {
+            actionBtn = `<button class="btn" style="width: auto; padding: 6px 14px; font-size: 12px; background: linear-gradient(135deg, #10b981, #059669);" onclick="quickRespondMatchmaking('${b.id}')">⚡ Быстрый отклик</button>`;
+          }
+
+          return `
+            <div style="background: rgba(245, 158, 11, 0.05); border: 1px solid rgba(245, 158, 11, 0.25); padding: 14px; border-radius: 12px; margin-bottom: 10px;">
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                  <div style="font-weight: 700; font-size: 14px; color: #fff; display: flex; align-items: center; gap: 8px;">
+                    <span>${b.ground.name}</span>
+                    <span class="tag tag-${b.ground.type}">${b.ground.type}</span>
+                  </div>
+                  <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">
+                    📅 ${b.booking_date} (${b.start_time} - ${b.end_time}) | 👤 Организатор: <b>${b.host_user?.full_name || 'Хозяин'}</b>
+                  </div>
+                  <div style="display: flex; gap: 8px; margin-top: 6px; font-size: 11px;">
+                    <span style="background: rgba(245, 158, 11, 0.2); color: #fde68a; padding: 3px 8px; border-radius: 6px; font-weight: 700;">🔥 Ищем ${b.needed_players_count} чел.</span>
+                    ${b.auto_approve_players ? '<span style="background: rgba(16, 185, 129, 0.2); color: #6ee7b7; padding: 3px 8px; border-radius: 6px; font-weight: 700;">⚡ 1-Click Авто-прием</span>' : '<span style="background: rgba(255,255,255,0.06); color: var(--text-muted); padding: 3px 8px; border-radius: 6px;">⏳ Ручное подтверждение</span>'}
+                    <span style="color: #a7f3d0; padding: 3px 0;">👥 Занято: ${totalParticipants}/15</span>
+                  </div>
+                </div>
+                <div>${actionBtn}</div>
+              </div>
+            </div>
+          `;
+        }).join('');
+      } catch (err) {
+        container.innerHTML = '<div style="font-size: 13px; color: #f87171;">Ошибка загрузки ленты Matchmaking</div>';
+      }
+    }
+
+    function toggleAutoApproveCheck(bookingId) {
+      const isLooking = document.getElementById(`mmLooking_${bookingId}`).checked;
+      const autoCheck = document.getElementById(`mmAuto_${bookingId}`);
+      if (autoCheck) {
+        autoCheck.disabled = !isLooking;
+        if (!isLooking) autoCheck.checked = false;
+      }
+    }
+
+    async function saveMatchmakingSettings(bookingId) {
+      const isLookingForPlayers = document.getElementById(`mmLooking_${bookingId}`).checked;
+      const neededPlayersCount = document.getElementById(`mmNeeded_${bookingId}`).value;
+      const autoApprovePlayers = document.getElementById(`mmAuto_${bookingId}`).checked;
+
+      try {
+        const res = await fetch(`${API_BASE}/bookings/${bookingId}/matchmaking-settings`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${currentUserToken}`
+          },
+          body: JSON.stringify({ isLookingForPlayers, neededPlayersCount, autoApprovePlayers })
+        });
+
+        const data = await res.json();
+        if (data.success) {
+          showAlert('Настройки поиска игроков сохранены!', 'success');
+          await loadOccupiedSlots();
+          await loadOpenMatchmakingFeed();
+        } else {
+          showAlert(data.message, 'error');
+        }
+      } catch (err) {
+        showAlert('Ошибка сохранения настроек: ' + err.message, 'error');
+      }
+    }
+
+    async function quickRespondMatchmaking(bookingId) {
+      try {
+        const currentActiveUser = presetUsers.find(u => u.phone === activePhone);
+        const bodyObj = {
+          user_name: currentActiveUser?.name || 'Участник',
+          user_phone: currentActiveUser?.phone || activePhone,
+          user_iin: currentActiveUser?.iin || ''
+        };
+
+        const res = await fetch(`${API_BASE}/bookings/${bookingId}/request-join`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${currentUserToken}`
+          },
+          body: JSON.stringify(bodyObj)
+        });
+
+        const data = await res.json();
+        if (data.success) {
+          showAlert(data.message, 'success');
+          await loadOccupiedSlots();
+          await loadOpenMatchmakingFeed();
+          await loadActiveAccess();
+        } else {
+          showAlert(data.message, 'error');
+        }
+      } catch (err) {
+        showAlert('Ошибка при отклике на матч: ' + err.message, 'error');
+      }
+    }
   </script>
 
   <!-- Modal for registering new user -->
@@ -1512,6 +2370,145 @@
       <div style="display: flex; gap: 10px;">
         <button class="btn" onclick="submitModalUserRegistration()" style="flex: 1;">Зарегистрировать & Авторизовать</button>
         <button class="btn btn-secondary" onclick="toggleRegisterModal(false)" style="width: auto;">Отмена</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal for editing existing venue/ground -->
+  <div id="editGroundModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.75); z-index: 9999; align-items: center; justify-content: center; backdrop-filter: blur(4px);">
+    <div style="background: var(--card-bg); border: 1px solid var(--card-border); width: 90%; max-width: 480px; border-radius: 16px; padding: 24px; box-shadow: 0 20px 40px rgba(0,0,0,0.5);">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+        <h3 style="font-size: 16px; color: #fff; margin: 0;">✏️ Редактирование площадки</h3>
+        <button onclick="toggleEditGroundModal(false)" style="background: none; border: none; color: var(--text-muted); font-size: 20px; cursor: pointer;">✕</button>
+      </div>
+
+      <input type="hidden" id="editGroundId">
+
+      <div class="form-group" style="margin-bottom: 10px;">
+        <label>Название площадки</label>
+        <input type="text" id="editGroundName">
+      </div>
+
+      <div class="form-group" style="margin-bottom: 10px;">
+        <label>Адрес</label>
+        <input type="text" id="editGroundAddress">
+      </div>
+
+      <div class="grid-2" style="margin-bottom: 10px;">
+        <div class="form-group">
+          <label>Вид спорта</label>
+          <select id="editGroundType">
+            <option value="football">⚽ Футбол</option>
+            <option value="basketball">🏀 Баскетбол</option>
+            <option value="volleyball">🏐 Волейбол</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Стоимость в час (₸, 0 = бесплатно)</label>
+          <input type="number" id="editGroundCost" min="0" placeholder="0">
+        </div>
+      </div>
+
+      <div class="grid-2" style="margin-bottom: 10px;">
+        <div class="form-group">
+          <label>Широта (Latitude)</label>
+          <input type="text" id="editGroundLat">
+        </div>
+        <div class="form-group">
+          <label>Долгота (Longitude)</label>
+          <input type="text" id="editGroundLon">
+        </div>
+      </div>
+
+      <div class="form-group" style="margin-bottom: 10px;">
+        <label>Допустимый радиус GPS (в метрах)</label>
+        <input type="number" id="editGroundRadius" value="50">
+      </div>
+
+      <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--card-border); padding: 12px; border-radius: 10px; margin-bottom: 16px;">
+        <label style="display: flex; align-items: center; gap: 8px; font-weight: 600; cursor: pointer; color: #fff;">
+          <input type="checkbox" id="editGroundIsSchool" style="width: 18px; height: 18px; accent-color: var(--accent-primary);">
+          🏫 Школьный объект (Приоритет уроков физкультуры)
+        </label>
+        <div class="form-group" style="margin-top: 10px; margin-bottom: 8px;">
+          <label style="font-size: 11px;">Дни школьных занятий (уроки физкультуры)</label>
+          <select id="editGroundSchoolDays" style="font-size: 12px; padding: 6px;">
+            <option value="MON_FRI">📅 Пн – Пт (5-дневка)</option>
+            <option value="MON_SAT">📅 Пн – Сб (6-дневка)</option>
+            <option value="ALL">🌐 Все дни (7 дней в неделю)</option>
+            <option value="NONE">🎉 Каникулы (Свободно все дни / Без уроков)</option>
+          </select>
+        </div>
+        <div class="grid-2">
+          <div class="form-group" style="margin: 0;">
+            <label style="font-size: 11px;">Начало школьного времени</label>
+            <input type="text" id="editGroundSchoolStart" value="08:00">
+          </div>
+          <div class="form-group" style="margin: 0;">
+            <label style="font-size: 11px;">Конец школьного времени</label>
+            <input type="text" id="editGroundSchoolEnd" value="15:00">
+          </div>
+        </div>
+      </div>
+
+      <!-- Venue-Specific Active Bans Section inside Edit Modal -->
+      <div style="background: rgba(239, 68, 68, 0.05); border: 1px dashed rgba(239, 68, 68, 0.3); padding: 12px; border-radius: 10px; margin-bottom: 16px;">
+        <div style="font-weight: 700; font-size: 12px; color: #fca5a5; margin-bottom: 6px; display: flex; align-items: center; justify-content: space-between;">
+          <span>🔒 Текущие баны на этой площадке</span>
+          <span style="font-size: 11px; color: var(--text-muted);" id="editGroundBansCount">0 банов</span>
+        </div>
+        <div id="editGroundBansList" style="max-height: 120px; overflow-y: auto; font-size: 11px; color: var(--text-muted);">
+          Загрузка нарушений...
+        </div>
+      </div>
+
+      <div style="display: flex; gap: 10px;">
+        <button class="btn" onclick="submitUpdateGround()" style="flex: 1;">💾 Сохранить изменения</button>
+        <button class="btn btn-secondary" onclick="toggleEditGroundModal(false)" style="width: auto;">Отмена</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal for manually banning user with flexible duration -->
+  <div id="banUserModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.75); z-index: 9999; align-items: center; justify-content: center; backdrop-filter: blur(4px);">
+    <div style="background: var(--card-bg); border: 1px solid var(--card-border); width: 90%; max-width: 460px; border-radius: 16px; padding: 24px; box-shadow: 0 20px 40px rgba(0,0,0,0.5);">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+        <h3 style="font-size: 16px; color: #fff; margin: 0;">⛔ Заблокировать пользователя</h3>
+        <button onclick="toggleBanUserModal(false)" style="background: none; border: none; color: var(--text-muted); font-size: 20px; cursor: pointer;">✕</button>
+      </div>
+
+      <input type="hidden" id="banTargetUserId">
+      <input type="hidden" id="banSelectedDuration" value="24h">
+
+      <div style="margin-bottom: 14px; padding: 10px; background: rgba(255,255,255,0.03); border-radius: 10px; font-size: 13px; color: #fff;" id="banTargetUserNameDisplay">
+        Пользователь: --
+      </div>
+
+      <div class="form-group" style="margin-bottom: 14px;">
+        <label style="font-size: 12px; color: var(--text-muted);">Срок блокировки</label>
+        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-top: 6px;">
+          <button type="button" class="btn ban-duration-btn active" id="banDur24h" style="padding: 8px; font-size: 12px; background: rgba(239,68,68,0.2); border: 1px solid #ef4444; color: #fff;" onclick="selectBanDuration('24h')">⏱️ 24 часа</button>
+          <button type="button" class="btn ban-duration-btn" id="banDur7d" style="padding: 8px; font-size: 12px; background: rgba(255,255,255,0.06); border: 1px solid var(--card-border); color: var(--text-muted);" onclick="selectBanDuration('7d')">📅 7 дней</button>
+          <button type="button" class="btn ban-duration-btn" id="banDur30d" style="padding: 8px; font-size: 12px; background: rgba(255,255,255,0.06); border: 1px solid var(--card-border); color: var(--text-muted);" onclick="selectBanDuration('30d')">📆 30 дней</button>
+          <button type="button" class="btn ban-duration-btn" id="banDurPERMANENT" style="padding: 8px; font-size: 12px; background: rgba(255,255,255,0.06); border: 1px solid var(--card-border); color: var(--text-muted);" onclick="selectBanDuration('PERMANENT')">⛔ Навсегда</button>
+        </div>
+      </div>
+
+      <div class="form-group" style="margin-bottom: 14px;">
+        <label style="font-size: 12px; color: var(--text-muted);">Привязать к площадке (Опционально)</label>
+        <select id="banTargetGroundSelect" style="font-size: 12px; padding: 8px;">
+          <option value="">🌐 Все площадки</option>
+        </select>
+      </div>
+
+      <div class="form-group" style="margin-bottom: 20px;">
+        <label style="font-size: 12px; color: var(--text-muted);">Причина блокировки</label>
+        <input type="text" id="banReasonInput" placeholder="Например: Нарушение правил / Неоплата" value="Заблокирован администратором">
+      </div>
+
+      <div style="display: flex; gap: 10px;">
+        <button class="btn" style="flex: 1; background: linear-gradient(135deg, #ef4444, #dc2626);" onclick="submitBanUser()">⛔ Подтвердить блокировку</button>
+        <button class="btn btn-secondary" onclick="toggleBanUserModal(false)" style="width: auto;">Отмена</button>
       </div>
     </div>
   </div>

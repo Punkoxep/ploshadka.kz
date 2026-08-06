@@ -67,6 +67,54 @@ async function main() {
   });
   console.log('✅ Guest 2 created:', guestUser2.full_name);
 
+  // 4. Create New Test Player 1: Ерлан Спортивный
+  const erlanIIN = '950101300111';
+  const erlanRes = validateIIN(erlanIIN);
+  const erlanUser = await prisma.user.create({
+    data: {
+      iin: erlanIIN,
+      phone_number: '+77771112233',
+      full_name: 'Ерлан Спортивный',
+      birth_date: erlanRes.birthDate || new Date('1995-01-01'),
+      gender: erlanRes.gender || 'male',
+      role: 'client',
+      password_hash,
+    },
+  });
+  console.log('✅ Test Player 1 created:', erlanUser.full_name);
+
+  // 5. Create New Test Player 2: Мария Волейбол
+  const mariaIIN = '980515400222';
+  const mariaRes = validateIIN(mariaIIN);
+  const mariaUser = await prisma.user.create({
+    data: {
+      iin: mariaIIN,
+      phone_number: '+77772223344',
+      full_name: 'Мария Волейбол',
+      birth_date: mariaRes.birthDate || new Date('1998-05-15'),
+      gender: mariaRes.gender || 'female',
+      role: 'client',
+      password_hash,
+    },
+  });
+  console.log('✅ Test Player 2 created:', mariaUser.full_name);
+
+  // 6. Create New Test Player 3: Берик Нападающий
+  const berikIIN = '010920500333';
+  const berikRes = validateIIN(berikIIN);
+  const berikUser = await prisma.user.create({
+    data: {
+      iin: berikIIN,
+      phone_number: '+77773334455',
+      full_name: 'Берик Нападающий',
+      birth_date: berikRes.birthDate || new Date('2001-09-20'),
+      gender: berikRes.gender || 'male',
+      role: 'client',
+      password_hash,
+    },
+  });
+  console.log('✅ Test Player 3 created:', berikUser.full_name);
+
   // 4. Create Sports Grounds for School #11
   const footballGround = await prisma.ground.create({
     data: {

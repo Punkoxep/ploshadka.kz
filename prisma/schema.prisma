@@ -16,6 +16,8 @@ model User {
   gender        String         // 'male' | 'female'
   role          String         @default("client") // 'client' | 'admin'
   is_blocked    Boolean        @default(false)
+  is_banned     Boolean        @default(false)
+  banned_until  DateTime?
   password_hash String
   email         String?
   avatar_url    String?
@@ -24,26 +26,35 @@ model User {
   hostedBookings Booking[]     @relation("HostBookings")
   bookingGuests  BookingGuest[]
   lockLogs       LockLog[]
+  userBans       UserBan[]
 
   @@map("users")
 }
 
 model Ground {
-  id                 String     @id @default(uuid())
-  name               String
-  type               String     // 'football' | 'volleyball' | 'basketball'
-  address            String
-  operating_schedule String     // e.g. "08:00 - 23:00"
-  cost_per_hour      Float
-  qr_code_token      String     @unique
-  ttlock_lock_id     String
-  ttlock_mac_address String?
-  created_at         DateTime   @default(now())
+  id                    String     @id @default(uuid())
+  name                  String
+  type                  String     // 'football' | 'volleyball' | 'basketball'
+  address               String
+  operating_schedule    String     // e.g. "08:00 - 23:00"
+  cost_per_hour         Float
+  latitude              Float      @default(43.238949)
+  longitude             Float      @default(76.889709)
+  allowed_radius_meters Int        @default(50)
+  qr_code_token         String     @unique
+  ttlock_lock_id        String
+  ttlock_mac_address    String?
+  is_school_court       Boolean    @default(true)
+  school_hours_start    String     @default("08:00")
+  school_hours_end      String     @default("15:00")
+  school_days           String     @default("MON_FRI")
+  created_at            DateTime   @default(now())
 
   gateways   Gateway[]
   bookings   Booking[]
   lockLogs   LockLog[]
   dailyStats VenueDailyStats[]
+  userBans   UserBan[]
 
   @@map("grounds")
 }
@@ -72,11 +83,15 @@ model Booking {
   booking_date   String         // 'YYYY-MM-DD'
   start_time     String         // 'HH:mm'
   end_time       String         // 'HH:mm'
-  status         String         @default("confirmed") // 'pending' | 'confirmed' | 'cancelled' | 'completed'
+  status         String         @default("confirmed") // 'pending' | 'confirmed' | 'cancelled' | 'cancelled_no_show' | 'completed'
   payment_status String         @default("paid") // 'unpaid' | 'paid' | 'refunded'
-  total_price    Float
-  invite_token   String         @unique @default(uuid())
-  created_at     DateTime       @default(now())
+  is_door_opened Boolean        @default(false)
+  total_price            Float
+  invite_token           String         @unique @default(uuid())
+  is_looking_for_players Boolean        @default(false)
+  needed_players_count   Int            @default(0)
+  auto_approve_players   Boolean        @default(false)
+  created_at             DateTime       @default(now())
 
   guests       BookingGuest[]
   lockLogs     LockLog[]
@@ -155,6 +170,20 @@ model VenueDailyStats {
 
   @@unique([ground_id, date])
   @@map("venue_daily_stats")
+}
+
+model UserBan {
+  id           String    @id @default(uuid())
+  user_id      String
+  user         User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  ground_id    String?
+  ground       Ground?   @relation(fields: [ground_id], references: [id], onDelete: SetNull)
+  reason       String
+  banned_until DateTime
+  is_resolved  Boolean   @default(false)
+  created_at   DateTime  @default(now())
+
+  @@map("user_bans")
 }
 
 

@@ -25,11 +25,15 @@ router.post('/iin/validate', (req, res) => {
 // --- Sports Grounds Routes ---
 router.get('/grounds', GroundsController.getAllGrounds as any);
 router.post('/grounds', authenticateJwt, requireAdmin, GroundsController.createGround as any);
+router.put('/grounds/:id', GroundsController.updateGround as any);
+router.put('/courts/:id', GroundsController.updateGround as any);
 router.get('/grounds/qr/:qr_code_token', GroundsController.getGroundByQrToken as any);
 
 // --- Bookings & Slot Management Routes ---
 router.get('/bookings/all', BookingsController.getAllBookings as any);
+router.get('/bookings/open-matchmaking', BookingsController.getOpenMatchmakingBookings as any);
 router.post('/bookings', authenticateJwt, BookingsController.createBooking as any);
+router.patch('/bookings/:id/matchmaking-settings', authenticateJwt, BookingsController.updateMatchmakingSettings as any);
 router.get('/bookings/my', authenticateJwt, BookingsController.getMyBookings as any);
 router.post('/bookings/:id/cancel', authenticateJwt, BookingsController.cancelBooking as any);
 router.delete('/bookings/:bookingId/guests/:guestId', authenticateJwt, BookingsController.removeGuest as any);
@@ -42,6 +46,8 @@ router.get('/bookings/requests', authenticateJwt, BookingsController.getHostInco
 router.post('/bookings/:id/request-join', authenticateJwt, BookingsController.requestJoinSlot as any);
 router.get('/bookings/:id/requests', authenticateJwt, BookingsController.getBookingJoinRequests as any);
 router.post('/bookings/requests/:requestId/respond', authenticateJwt, BookingsController.respondJoinRequest as any);
+router.post('/bookings/:id/requests/:requestId/approve', authenticateJwt, (req: any, res: any, next: any) => { req.body.status = 'APPROVED'; return (BookingsController.respondJoinRequest as any)(req, res, next); });
+router.post('/bookings/requests/:requestId/approve', authenticateJwt, (req: any, res: any, next: any) => { req.body.status = 'APPROVED'; return (BookingsController.respondJoinRequest as any)(req, res, next); });
 
 // --- Dynamic QR & Spontaneous Check-in ---
 router.post('/bookings/spontaneous-join', authenticateJwt, BookingsController.spontaneousQrCheckIn as any);
@@ -60,8 +66,17 @@ router.get('/admin/lock-logs', AdminController.getLockLogs as any);
 router.get('/admin/stats', AdminController.getSystemStats as any);
 
 // --- Admin Analytics & Metrics Routes ---
+router.get('/analytics/akimat', AdminController.getAkimatAnalytics as any);
+router.get('/admin/analytics/akimat', AdminController.getAkimatAnalytics as any);
 router.get('/admin/analytics/overview', AdminController.getAnalyticsOverview as any);
 router.get('/admin/analytics/venues/:venueId/heatmap', AdminController.getVenueHeatmap as any);
 router.get('/admin/analytics/venues/:venueId/players', AdminController.getVenuePlayersAnalytics as any);
+router.post('/admin/grounds', GroundsController.createGround as any);
+router.put('/admin/grounds/:id', GroundsController.updateGround as any);
+router.post('/admin/bookings/check-noshows', BookingsController.checkNoShows as any);
+router.get('/admin/bans', AdminController.getBansList as any);
+router.get('/admin/users', AdminController.getUsersList as any);
+router.post('/admin/users/:userId/ban', AdminController.banUser as any);
+router.post('/admin/users/:userId/unban', AdminController.unbanUser as any);
 
 export default router;

@@ -11,6 +11,7 @@ app.listen(PORT, () => {
   console.log(`📊 Interactive Web Test Dashboard: http://localhost:${PORT}`);
   console.log(`=======================================================`);
 
-  // Initialize TTLock Gateway Health Cron Monitoring
+  // Initialize TTLock Gateway Health Cron Monitoring & Automated No-Show Worker
   CronService.initGatewayMonitoring();
+  CronService.initNoShowAutoCheck();
 });

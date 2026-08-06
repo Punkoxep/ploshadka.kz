@@ -5,11 +5,49 @@ import { v4 as uuidv4 } from 'uuid';
 
 export class BookingsController {
   /**
+   * Helper to check if a user has any overlapping confirmed booking or approved team membership.
+   */
+  public static async checkUserHasOverlap(
+    userId: string,
+    bookingDate: string,
+    startTime: string,
+    endTime: string,
+    excludeBookingId?: string
+  ): Promise<boolean> {
+    const activeBookings = await prisma.booking.findMany({
+      where: {
+        booking_date: bookingDate,
+        status: 'confirmed',
+        ...(excludeBookingId ? { id: { not: excludeBookingId } } : {}),
+        OR: [
+          { host_user_id: userId },
+          { guests: { some: { user_id: userId, status: 'approved' } } },
+        ],
+      },
+    });
+
+    const overlap = activeBookings.find(
+      (b) => startTime < b.end_time && endTime > b.start_time
+    );
+
+    return !!overlap;
+  }
+  /**
    * Host creates a new booking slot for a sports ground
    */
   public static async createBooking(req: AuthenticatedRequest, res: Response) {
     try {
       if (!req.user) return res.status(401).json({ success: false, message: 'Не авторизован' });
+
+      // Check if user is currently banned for No-Show
+      const dbUser = await prisma.user.findUnique({ where: { id: req.user.id } });
+      if (dbUser && dbUser.is_banned && dbUser.banned_until && new Date(dbUser.banned_until) > new Date()) {
+        const bannedUntilStr = new Date(dbUser.banned_until).toLocaleString('ru-RU');
+        return res.status(403).json({
+          success: false,
+          message: `Ваш аккаунт заблокирован за неявку (No-Show) до ${bannedUntilStr}`,
+        });
+      }
 
       const { ground_id, booking_date, start_time, end_time, total_price } = req.body;
 
@@ -26,7 +64,37 @@ export class BookingsController {
         return res.status(404).json({ success: false, message: 'Площадка не найдена' });
       }
 
-      // Check for overlapping bookings
+      // Check School Hours reservation rule with day-of-week selection
+      if (ground.is_school_court) {
+        const schoolStart = ground.school_hours_start || '08:00';
+        const schoolEnd = ground.school_hours_end || '15:00';
+        const schoolDays = ground.school_days || 'MON_FRI';
+
+        // Determine day of week (0 = Sun, 1 = Mon, ..., 6 = Sat)
+        const bookingDateObj = new Date(`${booking_date}T00:00:00`);
+        const dayOfWeek = bookingDateObj.getDay();
+
+        let isSchoolDay = false;
+        if (schoolDays === 'NONE' || schoolDays === 'VACATION') {
+          isSchoolDay = false; // School break / holidays — all days free!
+        } else if (schoolDays === 'ALL') {
+          isSchoolDay = true;
+        } else if (schoolDays === 'MON_SAT') {
+          isSchoolDay = dayOfWeek >= 1 && dayOfWeek <= 6; // Mon - Sat
+        } else {
+          // MON_FRI default (5-day week)
+          isSchoolDay = dayOfWeek >= 1 && dayOfWeek <= 5; // Mon - Fri
+        }
+
+        if (isSchoolDay && (start_time < schoolEnd && end_time > schoolStart)) {
+          return res.status(400).json({
+            success: false,
+            message: 'В это время (в учебный день) площадка зарезервирована под уроки физкультуры и школьные занятия',
+          });
+        }
+      }
+
+      // Check for overlapping bookings on the target ground
       const existingOverlap = await prisma.booking.findFirst({
         where: {
           ground_id,
@@ -47,6 +115,33 @@ export class BookingsController {
         return res.status(400).json({
           success: false,
           message: 'Данное время на выбранной площадке уже забронировано',
+        });
+      }
+
+      // Check for user's own overlapping bookings across any court/ground on the same date
+      const userActiveBookings = await prisma.booking.findMany({
+        where: {
+          booking_date,
+          status: 'confirmed',
+          OR: [
+            { host_user_id: req.user.id },
+            { guests: { some: { user_id: req.user.id } } },
+          ],
+        },
+        include: { ground: true },
+      });
+
+      const userOverlap = userActiveBookings.find((b) => {
+        // Formula: (NewStartTime < ExistingEndTime) AND (NewEndTime > ExistingStartTime)
+        return start_time < b.end_time && end_time > b.start_time;
+      });
+
+      if (userOverlap) {
+        const groundName = userOverlap.ground ? userOverlap.ground.name : 'другое поле';
+        const timeWindow = `${userOverlap.start_time}-${userOverlap.end_time}`;
+        return res.status(400).json({
+          success: false,
+          message: `Вы не можете забронировать эту площадку, так как у вас уже есть активная бронь на другое поле в это же время (${groundName}, ${timeWindow}).`,
         });
       }
 
@@ -245,6 +340,21 @@ export class BookingsController {
         return res.status(400).json({ success: false, message: 'Вы уже присоединились к этой игре' });
       }
 
+      // Check if user has an overlapping active booking or team game
+      const hasOverlap = await BookingsController.checkUserHasOverlap(
+        req.user.id,
+        booking.booking_date,
+        booking.start_time,
+        booking.end_time,
+        booking.id
+      );
+      if (hasOverlap) {
+        return res.status(400).json({
+          success: false,
+          message: 'Вы не можете присоединиться: у вас уже есть активная бронь или игра в другой команде в это время',
+        });
+      }
+
       // Add to slot as invited guest
       const guest = await prisma.bookingGuest.create({
         data: {
@@ -362,6 +472,21 @@ export class BookingsController {
         });
       }
 
+      // Check if user has an overlapping active booking or team game
+      const hasOverlap = await BookingsController.checkUserHasOverlap(
+        req.user.id,
+        currentActiveBooking.booking_date,
+        currentActiveBooking.start_time,
+        currentActiveBooking.end_time,
+        currentActiveBooking.id
+      );
+      if (hasOverlap) {
+        return res.status(400).json({
+          success: false,
+          message: 'Вы не можете подать заявку: у вас уже есть активная бронь или игра в другой команде в это время',
+        });
+      }
+
       // Create JoinRequest with status PENDING for host review (DO NOT add to BookingGuest yet)
       const joinRequest = await prisma.joinRequest.create({
         data: {
@@ -476,15 +601,65 @@ export class BookingsController {
         });
       }
 
+      // Check if user has an overlapping active booking or team game
+      const hasOverlap = await BookingsController.checkUserHasOverlap(
+        req.user.id,
+        booking.booking_date,
+        booking.start_time,
+        booking.end_time,
+        booking.id
+      );
+      if (hasOverlap) {
+        return res.status(400).json({
+          success: false,
+          message: 'Вы не можете подать заявку: у вас уже есть активная бронь или игра в другой команде в это время',
+        });
+      }
+
+      // Auto-approval logic if Matchmaking is active & autoApprovePlayers === true
+      const isAutoApprove = booking.is_looking_for_players && booking.auto_approve_players && booking.needed_players_count > 0;
+      const initialStatus = isAutoApprove ? 'APPROVED' : 'PENDING';
+
       const joinRequest = await prisma.joinRequest.create({
         data: {
           booking_id: booking.id,
           user_iin: applicantIin,
           user_name: applicantName,
           user_phone: applicantPhone,
-          status: 'PENDING',
+          status: initialStatus,
         },
       });
+
+      if (isAutoApprove) {
+        // Add applicant as an approved guest to BookingGuest granting door access
+        await prisma.bookingGuest.create({
+          data: {
+            booking_id: booking.id,
+            user_id: req.user.id,
+            type: 'invited',
+            status: 'approved',
+          },
+        });
+
+        // Decrement needed_players_count by 1
+        const newNeededCount = Math.max(0, booking.needed_players_count - 1);
+        const disableSearch = newNeededCount === 0;
+
+        await prisma.booking.update({
+          where: { id: booking.id },
+          data: {
+            needed_players_count: newNeededCount,
+            is_looking_for_players: disableSearch ? false : booking.is_looking_for_players,
+          },
+        });
+
+        return res.status(201).json({
+          success: true,
+          message: 'Заявка автоматически одобрена! Вы успешно присоединились к игре и получили доступ к замку.',
+          data: joinRequest,
+          autoApproved: true,
+        });
+      }
 
       return res.status(201).json({
         success: true,
@@ -493,6 +668,86 @@ export class BookingsController {
       });
     } catch (error: any) {
       console.error('[BookingsController.requestJoinSlot]', error);
+      return res.status(500).json({ success: false, message: error.message });
+    }
+  }
+
+  /**
+   * PATCH /api/v1/bookings/:id/matchmaking-settings
+   * Update Matchmaking settings for a booking slot (Host/Admin only)
+   */
+  public static async updateMatchmakingSettings(req: AuthenticatedRequest, res: Response) {
+    try {
+      if (!req.user) return res.status(401).json({ success: false, message: 'Не авторизован' });
+
+      const { id } = req.params;
+      const { isLookingForPlayers, is_looking_for_players, neededPlayersCount, needed_players_count, autoApprovePlayers, auto_approve_players } = req.body;
+
+      const booking = await prisma.booking.findUnique({ where: { id } });
+      if (!booking) {
+        return res.status(404).json({ success: false, message: 'Бронирование не найдено' });
+      }
+
+      if (booking.host_user_id !== req.user.id && req.user.role !== 'admin') {
+        return res.status(403).json({ success: false, message: 'Только хозяин слота может изменять настройки поиска игроков' });
+      }
+
+      const flagLooking = isLookingForPlayers !== undefined ? Boolean(isLookingForPlayers) : (is_looking_for_players !== undefined ? Boolean(is_looking_for_players) : booking.is_looking_for_players);
+      const countNeeded = neededPlayersCount !== undefined ? parseInt(neededPlayersCount) : (needed_players_count !== undefined ? parseInt(needed_players_count) : booking.needed_players_count);
+      const flagAutoApprove = autoApprovePlayers !== undefined ? Boolean(autoApprovePlayers) : (auto_approve_players !== undefined ? Boolean(auto_approve_players) : booking.auto_approve_players);
+
+      const updated = await prisma.booking.update({
+        where: { id },
+        data: {
+          is_looking_for_players: flagLooking,
+          needed_players_count: Math.max(0, countNeeded),
+          auto_approve_players: flagAutoApprove,
+        },
+        include: {
+          ground: true,
+          host_user: { select: { id: true, full_name: true, phone_number: true, iin: true } },
+          guests: { include: { user: { select: { id: true, full_name: true } } } },
+        },
+      });
+
+      return res.json({
+        success: true,
+        message: 'Настройки поиска игроков (Matchmaking) успешно обновлены',
+        data: updated,
+      });
+    } catch (error: any) {
+      console.error('[BookingsController.updateMatchmakingSettings]', error);
+      return res.status(500).json({ success: false, message: error.message });
+    }
+  }
+
+  /**
+   * GET /api/v1/bookings/open-matchmaking
+   * Get all active confirmed bookings where is_looking_for_players === true and needed_players_count > 0
+   */
+  public static async getOpenMatchmakingBookings(req: Request, res: Response) {
+    try {
+      const openBookings = await prisma.booking.findMany({
+        where: {
+          status: 'confirmed',
+          is_looking_for_players: true,
+          needed_players_count: { gt: 0 },
+        },
+        include: {
+          ground: true,
+          host_user: { select: { id: true, full_name: true, phone_number: true, iin: true } },
+          guests: { include: { user: { select: { id: true, full_name: true } } } },
+          joinRequests: true,
+        },
+        orderBy: [{ booking_date: 'asc' }, { start_time: 'asc' }],
+      });
+
+      return res.json({
+        success: true,
+        data: openBookings,
+      });
+    } catch (error: any) {
+      console.error('[BookingsController.getOpenMatchmakingBookings]', error);
       return res.status(500).json({ success: false, message: error.message });
     }
   }
@@ -625,6 +880,35 @@ export class BookingsController {
 
       if (joinRequest.booking.host_user_id !== req.user.id && req.user.role !== 'admin') {
         return res.status(403).json({ success: false, message: 'Только хозяин слота может принимать или отклонять заявки' });
+      }
+
+      // Check candidate user for active booking/team overlaps if approval requested
+      if (status === 'APPROVED') {
+        const candidateUser = await prisma.user.findFirst({
+          where: {
+            OR: [
+              { iin: joinRequest.user_iin },
+              { phone_number: joinRequest.user_phone },
+            ],
+          },
+        });
+
+        if (candidateUser) {
+          const hasOverlap = await BookingsController.checkUserHasOverlap(
+            candidateUser.id,
+            joinRequest.booking.booking_date,
+            joinRequest.booking.start_time,
+            joinRequest.booking.end_time,
+            joinRequest.booking_id
+          );
+
+          if (hasOverlap) {
+            return res.status(400).json({
+              success: false,
+              message: 'Нельзя принять пользователя: у него уже есть активная бронь или игра в другой команде в это время',
+            });
+          }
+        }
       }
 
       const updatedRequest = await prisma.joinRequest.update({
@@ -817,6 +1101,93 @@ export class BookingsController {
       });
     } catch (error: any) {
       console.error('[BookingsController.removeGuest]', error);
+      return res.status(500).json({ success: false, message: error.message });
+    }
+  }
+
+  /**
+   * Helper method for No-Show Auto-Ban Engine (Background Cron Worker)
+   */
+  public static async processNoShowAutoBans() {
+    const now = new Date();
+    const currentDateStr = now.toISOString().split('T')[0];
+
+    const confirmedBookings = await prisma.booking.findMany({
+      where: {
+        booking_date: currentDateStr,
+        status: 'confirmed',
+        is_door_opened: false,
+      },
+      include: { host_user: true },
+    });
+
+    const bannedUntilDate = new Date(now.getTime() + 24 * 60 * 60 * 1000); // 24 Hours from now
+    let count = 0;
+
+    for (const b of confirmedBookings) {
+      const [startH, startM] = b.start_time.split(':').map(Number);
+      const bookingStartDate = new Date(now);
+      bookingStartDate.setHours(startH, startM, 0, 0);
+
+      const diffMs = now.getTime() - bookingStartDate.getTime();
+      const diffMins = diffMs / (1000 * 60);
+
+      if (diffMins >= 10) {
+        await prisma.booking.update({
+          where: { id: b.id },
+          data: { status: 'cancelled_no_show' },
+        });
+
+        // Admin Immunity Check
+        const isAdmin = b.host_user.role === 'admin' || b.host_user.role === 'superadmin';
+
+        if (!isAdmin) {
+          await prisma.user.update({
+            where: { id: b.host_user_id },
+            data: {
+              is_banned: true,
+              banned_until: bannedUntilDate,
+            },
+          });
+
+          // Record Ban Log Entry in DB
+          await prisma.userBan.create({
+            data: {
+              user_id: b.host_user_id,
+              ground_id: b.ground_id,
+              reason: 'No-Show (Неявка на бронирование >10 мин)',
+              banned_until: bannedUntilDate,
+              is_resolved: false,
+            },
+          });
+
+          console.log(`[No-Show Worker] Auto-cancelled booking "${b.id}" and issued 24h ban for host "${b.host_user.full_name}".`);
+        } else {
+          console.log(`[No-Show Worker] Auto-cancelled booking "${b.id}". Admin Immunity applied: No ban issued for "${b.host_user.full_name}".`);
+        }
+
+        count++;
+      }
+    }
+
+    return count;
+  }
+
+  /**
+   * 10-Minute No-Show Auto-Ban Engine
+   * Finds confirmed bookings past 10 minutes from start_time where is_door_opened === false.
+   * Cancels booking (status = 'cancelled_no_show') and bans host user for 24 hours.
+   */
+  public static async checkNoShows(req: Request, res: Response) {
+    try {
+      const count = await BookingsController.processNoShowAutoBans();
+      return res.json({
+        success: true,
+        message: `Проверка неявок завершена. Обработано неявок: ${count}`,
+        data: { noShowsCount: count },
+      });
+    } catch (error: any) {
+      console.error('[BookingsController.checkNoShows]', error);
       return res.status(500).json({ success: false, message: error.message });
     }
   }
