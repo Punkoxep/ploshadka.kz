@@ -130,7 +130,8 @@ export class LocksController {
       // Execute TTLock Unlock
       const unlockResult = await TTLockService.unlockLock(
         booking.ground.ttlock_lock_id,
-        isGatewayOnline
+        isGatewayOnline,
+        { booking_id: booking.id, ground_name: booking.ground.name }
       );
 
       // Log unlock operation
@@ -155,8 +156,10 @@ export class LocksController {
       return res.json({
         success: unlockResult.success,
         doorUnlocked: true,
-        data: {
-          ...unlockResult,
+        data: unlockResult.data || {
+          mode: unlockResult.mode,
+          message: unlockResult.message,
+          lockId: booking.ground.ttlock_lock_id,
           booking_id: booking.id,
           ground_name: booking.ground.name,
         },
@@ -310,7 +313,11 @@ export class LocksController {
 
         const gateway = ground.gateways[0];
         const isGatewayOnline = gateway ? gateway.status === 'online' : true;
-        const unlockResult = await TTLockService.unlockLock(ground.ttlock_lock_id, isGatewayOnline);
+        const unlockResult = await TTLockService.unlockLock(
+          ground.ttlock_lock_id,
+          isGatewayOnline,
+          { booking_id: currentBooking.id, ground_name: ground.name }
+        );
 
         await prisma.lockLog.create({
           data: {
@@ -333,8 +340,13 @@ export class LocksController {
         return res.json({
           success: unlockResult.success,
           doorUnlocked: true,
-          message: unlockResult.message,
-          data: unlockResult,
+          data: unlockResult.data || {
+            mode: unlockResult.mode,
+            message: unlockResult.message,
+            lockId: ground.ttlock_lock_id,
+            booking_id: currentBooking.id,
+            ground_name: ground.name,
+          },
         });
       }
 

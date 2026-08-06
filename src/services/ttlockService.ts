@@ -4,11 +4,13 @@ import { prisma } from '../config/prisma';
 
 export interface TTLockUnlockResponse {
   success: boolean;
-  mode: 'online_cloud' | 'offline_passcode' | 'offline_ekey';
+  doorUnlocked?: boolean;
+  mode: 'online_cloud' | 'offline_passcode' | 'offline_ekey' | 'mock_online_unlock';
   message: string;
   offlinePasscode?: string;
   offlineEkeyToken?: string;
   rawResponse?: any;
+  data?: any;
 }
 
 export interface TTLockPasscodeResponse {
@@ -121,22 +123,34 @@ export class TTLockService {
    */
   public static async unlockLock(
     lockId: string,
-    isGatewayOnline: boolean = true
+    isGatewayOnline: boolean = true,
+    bookingDetails?: { booking_id?: string; ground_name?: string }
   ): Promise<TTLockUnlockResponse> {
     console.log(`[TTLockService] Unlock attempt for lockId: ${lockId}, Mode: ${this.currentMode}, Gateway Online: ${isGatewayOnline}`);
 
+    // --- 1. MOCK MODE (MOCK) ---
+    if (this.currentMode === 'mock') {
+      const msg = 'Эмулятор TTLock: Дверь успешно открыта по Wi-Fi/5G шлюзу (Mock)';
+      return {
+        success: true,
+        doorUnlocked: true,
+        mode: 'mock_online_unlock',
+        message: msg,
+        rawResponse: { errcode: 0, errmsg: 'Mock Success', lockId },
+        data: {
+          mode: 'mock_online_unlock',
+          message: msg,
+          lockId: lockId,
+          booking_id: bookingDetails?.booking_id || null,
+          ground_name: bookingDetails?.ground_name || null,
+        },
+      };
+    }
+
+    // --- 2. LIVE MODE (REAL) ---
     if (!isGatewayOnline) {
       console.warn(`[TTLockService] Gateway is offline for lock ${lockId}. Switching to Offline Failover Mode...`);
       return this.generateOfflineFallback(lockId, 'Шлюз 5G/Wi-Fi не в сети');
-    }
-
-    if (this.currentMode === 'mock') {
-      return {
-        success: true,
-        mode: 'online_cloud',
-        message: 'Замок разблокирован (Эмулятор Mock)',
-        rawResponse: { errcode: 0, errmsg: 'Mock Success', lockId },
-      };
     }
 
     try {
@@ -162,9 +176,18 @@ export class TTLockService {
       if (data && data.errcode === 0) {
         return {
           success: true,
+          doorUnlocked: true,
           mode: 'online_cloud',
           message: 'Замок разблокирован через боевой TTLock Cloud API',
           rawResponse: data,
+          data: {
+            mode: 'online_cloud',
+            message: 'Замок разблокирован через боевой TTLock Cloud API',
+            lockId: lockId,
+            booking_id: bookingDetails?.booking_id || null,
+            ground_name: bookingDetails?.ground_name || null,
+            rawResponse: data,
+          },
         };
       } else {
         console.warn(`[TTLockService] Real TTLock API error code ${data?.errcode}: ${data?.errmsg}. Falling back to offline PIN.`);
