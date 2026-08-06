@@ -40,9 +40,10 @@ model Ground {
   ttlock_mac_address String?
   created_at         DateTime   @default(now())
 
-  gateways Gateway[]
-  bookings Booking[]
-  lockLogs LockLog[]
+  gateways   Gateway[]
+  bookings   Booking[]
+  lockLogs   LockLog[]
+  dailyStats VenueDailyStats[]
 
   @@map("grounds")
 }
@@ -77,8 +78,9 @@ model Booking {
   invite_token   String         @unique @default(uuid())
   created_at     DateTime       @default(now())
 
-  guests   BookingGuest[]
-  lockLogs LockLog[]
+  guests       BookingGuest[]
+  lockLogs     LockLog[]
+  joinRequests JoinRequest[]
 
   @@map("bookings")
 }
@@ -125,3 +127,34 @@ model GatewayStatusLog {
 
   @@map("gateway_status_logs")
 }
+
+model JoinRequest {
+  id         String   @id @default(uuid())
+  booking_id String
+  booking    Booking  @relation(fields: [booking_id], references: [id], onDelete: Cascade)
+  user_iin   String
+  user_name  String
+  user_phone String
+  status     String   @default("PENDING") // 'PENDING' | 'APPROVED' | 'REJECTED'
+  created_at DateTime @default(now())
+
+  @@map("join_requests")
+}
+
+model VenueDailyStats {
+  id                   String   @id @default(uuid())
+  ground_id            String
+  ground               Ground   @relation(fields: [ground_id], references: [id], onDelete: Cascade)
+  date                 String   // 'YYYY-MM-DD'
+  total_bookings       Int      @default(0)
+  unique_players_count Int      @default(0)
+  peak_hours_occupancy Float    @default(0.0)
+  off_peak_occupancy   Float    @default(0.0)
+  average_team_size    Float    @default(0.0)
+  created_at           DateTime @default(now())
+
+  @@unique([ground_id, date])
+  @@map("venue_daily_stats")
+}
+
+

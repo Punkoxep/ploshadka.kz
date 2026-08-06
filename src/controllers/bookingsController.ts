@@ -312,7 +312,7 @@ export class BookingsController {
       if (!currentActiveBooking) {
         return res.status(400).json({
           success: false,
-          message: 'На данной площадке сейчас нет активного сеанса игры',
+          message: 'Слот свободен. Пожалуйста, забронируйте площадку через расписание',
         });
       }
 
@@ -336,7 +336,7 @@ export class BookingsController {
       }
 
       // Check if user is already a guest
-      const existingGuest = currentActiveBooking.guests.find((g) => g.user_id === req.user?.id);
+      const existingGuest = currentActiveBooking.guests.find((g) => g.user_id === req.user?.id && g.status === 'approved');
       if (existingGuest) {
         return res.json({
           success: true,
@@ -345,27 +345,482 @@ export class BookingsController {
         });
       }
 
-      // Add user as spontaneous guest
-      const newGuest = await prisma.bookingGuest.create({
-        data: {
+      // Check if user already submitted a join request
+      const existingRequests = await prisma.joinRequest.findMany({
+        where: {
           booking_id: currentActiveBooking.id,
-          user_id: req.user.id,
-          type: 'spontaneous_check_in',
-          status: 'approved', // Beta default
-        },
-        include: {
-          user: { select: { id: true, full_name: true, phone_number: true } },
+          user_iin: req.user.iin,
         },
       });
 
-      return res.status(201).json({
+      const activeReq = existingRequests.find((r) => r.status === 'PENDING' || r.status === 'APPROVED');
+      if (activeReq) {
+        return res.json({
+          success: true,
+          message: activeReq.status === 'APPROVED' ? 'Ваша заявка на присоединение уже одобрена' : 'Запрос на спонтанный вход отправлен хозяину слота. Ожидайте одобрения',
+          data: activeReq,
+        });
+      }
+
+      // Create JoinRequest with status PENDING for host review (DO NOT add to BookingGuest yet)
+      const joinRequest = await prisma.joinRequest.create({
+        data: {
+          booking_id: currentActiveBooking.id,
+          user_iin: req.user.iin,
+          user_name: req.user.full_name,
+          user_phone: req.user.phone_number,
+          status: 'PENDING',
+        },
+      });
+
+      return res.status(200).json({
         success: true,
-        message: 'Вы успешно присоединились к активному сеансу на площадке!',
-        data: newGuest,
+        message: 'Запрос на спонтанный вход отправлен хозяину слота. Ожидайте одобрения',
+        data: joinRequest,
       });
     } catch (error: any) {
       console.error('[BookingsController.spontaneousQrCheckIn]', error);
       return res.status(500).json({ success: false, message: error.message });
     }
   }
+
+  /**
+   * Get all active/confirmed bookings (for browsing occupied slots to request join)
+   */
+  public static async getAllBookings(req: Request, res: Response) {
+    try {
+      const bookings = await prisma.booking.findMany({
+        where: { status: 'confirmed' },
+        include: {
+          ground: true,
+          host_user: { select: { id: true, full_name: true, phone_number: true, iin: true } },
+          guests: {
+            include: { user: { select: { id: true, full_name: true, phone_number: true, iin: true } } },
+          },
+          joinRequests: true,
+        },
+        orderBy: [{ booking_date: 'asc' }, { start_time: 'asc' }],
+      });
+
+      return res.json({
+        success: true,
+        data: bookings,
+      });
+    } catch (error: any) {
+      return res.status(500).json({ success: false, message: error.message });
+    }
+  }
+
+  /**
+   * Send a request to join an occupied slot (JoinRequest PENDING)
+   */
+  public static async requestJoinSlot(req: AuthenticatedRequest, res: Response) {
+    try {
+      if (!req.user) return res.status(401).json({ success: false, message: 'Не авторизован' });
+
+      const { id } = req.params; // booking_id
+      const { user_name, user_phone, user_iin } = req.body;
+
+      const booking = await prisma.booking.findUnique({
+        where: { id },
+        include: { guests: true, joinRequests: true },
+      });
+
+      if (!booking) {
+        return res.status(404).json({ success: false, message: 'Бронирование не найдено' });
+      }
+
+      if (booking.host_user_id === req.user.id) {
+        return res.status(400).json({ success: false, message: 'Вы являетесь хозяином этого слота' });
+      }
+
+      const applicantIin = user_iin || req.user.iin;
+      let applicantName = user_name || req.user?.full_name;
+      const applicantPhone = user_phone || req.user?.phone_number;
+
+      // Ensure valid name: if missing or containing '?', look up authentic User record by IIN/phone
+      if (!applicantName || applicantName.includes('?')) {
+        const foundUser = await prisma.user.findFirst({
+          where: {
+            OR: [
+              { iin: applicantIin },
+              { phone_number: applicantPhone },
+            ],
+          },
+        });
+        if (foundUser && foundUser.full_name) {
+          applicantName = foundUser.full_name;
+        }
+      }
+
+      if (!applicantName || applicantName.includes('?')) {
+        applicantName = 'Участник';
+      }
+
+      // Check if user is already a guest
+      const isAlreadyGuest = booking.guests.some((g) => g.user_id === req.user?.id);
+      if (isAlreadyGuest) {
+        return res.status(400).json({ success: false, message: 'Вы уже являетесь участником этой игры' });
+      }
+
+      // Check if user already submitted a request
+      const existingRequest = booking.joinRequests.find(
+        (r) => r.user_iin === applicantIin && (r.status === 'PENDING' || r.status === 'APPROVED')
+      );
+      if (existingRequest) {
+        return res.status(400).json({
+          success: false,
+          message: existingRequest.status === 'APPROVED' 
+            ? 'Ваша заявка на присоединение уже одобрена' 
+            : 'Вы уже отправили заявку на присоединение. Ожидайте ответа хозяина.',
+        });
+      }
+
+      const joinRequest = await prisma.joinRequest.create({
+        data: {
+          booking_id: booking.id,
+          user_iin: applicantIin,
+          user_name: applicantName,
+          user_phone: applicantPhone,
+          status: 'PENDING',
+        },
+      });
+
+      return res.status(201).json({
+        success: true,
+        message: 'Заявка на присоединение к слоту успешно отправлена!',
+        data: joinRequest,
+      });
+    } catch (error: any) {
+      console.error('[BookingsController.requestJoinSlot]', error);
+      return res.status(500).json({ success: false, message: error.message });
+    }
+  }
+
+  /**
+   * Get all join requests for a booking slot
+   */
+  public static async getBookingJoinRequests(req: AuthenticatedRequest, res: Response) {
+    try {
+      if (!req.user) return res.status(401).json({ success: false, message: 'Не авторизован' });
+
+      const { id } = req.params;
+
+      const booking = await prisma.booking.findUnique({
+        where: { id },
+      });
+
+      if (!booking) {
+        return res.status(404).json({ success: false, message: 'Бронирование не найдено' });
+      }
+
+      if (booking.host_user_id !== req.user.id && req.user.role !== 'admin') {
+        return res.status(403).json({ success: false, message: 'У вас нет прав для просмотра заявок этого слота' });
+      }
+
+      const requests = await prisma.joinRequest.findMany({
+        where: { booking_id: id },
+        orderBy: { created_at: 'desc' },
+      });
+
+      return res.json({
+        success: true,
+        data: requests,
+      });
+    } catch (error: any) {
+      return res.status(500).json({ success: false, message: error.message });
+    }
+  }
+
+  /**
+   * GET /api/v1/bookings/requests
+   * Get all incoming PENDING join requests for bookings hosted by current user
+   */
+  public static async getHostIncomingRequests(req: AuthenticatedRequest, res: Response) {
+    try {
+      const userIin = (req.user?.iin) || (req.headers['x-user-iin'] as string) || (req.query.userIin as string);
+
+      let hostUser;
+      if (userIin) {
+        hostUser = await prisma.user.findFirst({ where: { iin: userIin } });
+      } else if (req.user?.id) {
+        hostUser = req.user;
+      }
+
+      if (!hostUser) {
+        return res.json({ success: true, data: [] });
+      }
+
+      // Find all join requests for bookings hosted by this user
+      const requests = await prisma.joinRequest.findMany({
+        where: {
+          booking: {
+            host_user_id: hostUser.id,
+          },
+        },
+        include: {
+          booking: {
+            include: { ground: true },
+          },
+        },
+        orderBy: { created_at: 'desc' },
+      });
+
+      // Sanitize requests to guarantee user_name is valid UTF-8 and populated
+      const sanitizedRequests = await Promise.all(
+        requests.map(async (r) => {
+          let name = r.user_name;
+          if (!name || name.includes('?')) {
+            const matchedUser = await prisma.user.findFirst({
+              where: {
+                OR: [
+                  { iin: r.user_iin },
+                  { phone_number: r.user_phone },
+                ],
+              },
+            });
+            if (matchedUser?.full_name) {
+              name = matchedUser.full_name;
+            }
+          }
+          return {
+            ...r,
+            user_name: name || 'Участник',
+          };
+        })
+      );
+
+      return res.json({
+        success: true,
+        data: sanitizedRequests,
+      });
+    } catch (error: any) {
+      console.error('[BookingsController.getHostIncomingRequests]', error);
+      return res.status(500).json({ success: false, message: error.message });
+    }
+  }
+
+  /**
+   * Host approves (APPROVED) or rejects (REJECTED) a join request
+   */
+  public static async respondJoinRequest(req: AuthenticatedRequest, res: Response) {
+    try {
+      if (!req.user) return res.status(401).json({ success: false, message: 'Не авторизован' });
+
+      const { requestId } = req.params;
+      const { status } = req.body; // 'APPROVED' | 'REJECTED'
+
+      if (!status || !['APPROVED', 'REJECTED'].includes(status)) {
+        return res.status(400).json({ success: false, message: 'Укажите статус: APPROVED или REJECTED' });
+      }
+
+      const joinRequest = await prisma.joinRequest.findUnique({
+        where: { id: requestId },
+        include: { booking: true },
+      });
+
+      if (!joinRequest) {
+        return res.status(404).json({ success: false, message: 'Заявка не найдена' });
+      }
+
+      if (joinRequest.booking.host_user_id !== req.user.id && req.user.role !== 'admin') {
+        return res.status(403).json({ success: false, message: 'Только хозяин слота может принимать или отклонять заявки' });
+      }
+
+      const updatedRequest = await prisma.joinRequest.update({
+        where: { id: requestId },
+        data: { status },
+      });
+
+      // If approved, automatically add applicant as an approved guest to BookingGuest and send TTLock unlock
+      if (status === 'APPROVED') {
+        const fullRequest = await prisma.joinRequest.findUnique({
+          where: { id: requestId },
+          include: {
+            booking: {
+              include: { ground: { include: { gateways: true } } },
+            },
+          },
+        });
+
+        if (fullRequest) {
+          const applicantUser = await prisma.user.findFirst({
+            where: {
+              OR: [
+                { iin: fullRequest.user_iin },
+                { phone_number: fullRequest.user_phone },
+              ],
+            },
+          });
+
+          if (applicantUser) {
+            const existingGuest = await prisma.bookingGuest.findUnique({
+              where: {
+                booking_id_user_id: {
+                  booking_id: fullRequest.booking_id,
+                  user_id: applicantUser.id,
+                },
+              },
+            });
+
+            if (!existingGuest) {
+              await prisma.bookingGuest.create({
+                data: {
+                  booking_id: fullRequest.booking_id,
+                  user_id: applicantUser.id,
+                  type: fullRequest.status === 'PENDING_SPONTANEOUS' ? 'spontaneous_check_in' : 'invited',
+                  status: 'approved',
+                },
+              });
+            }
+          }
+
+          // Trigger physical TTLock unlock for spontaneous gate check-in
+          const { TTLockService } = require('../services/ttlockService');
+          const gateway = fullRequest.booking.ground.gateways[0];
+          const isGatewayOnline = gateway ? gateway.status === 'online' : true;
+          const unlockRes = await TTLockService.unlockLock(fullRequest.booking.ground.ttlock_lock_id, isGatewayOnline);
+
+          // Log unlock operation
+          await prisma.lockLog.create({
+            data: {
+              booking_id: fullRequest.booking_id,
+              user_id: req.user.id,
+              ground_id: fullRequest.booking.ground.id,
+              method: 'host_approval_qr',
+              unlock_type: unlockRes.mode,
+              success: unlockRes.success,
+              details: `Хозяин одобрил заявку ${fullRequest.user_name} (${fullRequest.user_iin}). Замок разблокирован.`,
+            },
+          });
+        }
+      }
+
+      return res.json({
+        success: true,
+        message: status === 'APPROVED' ? 'Заявка одобрена! Команда разблокировки двери отправлена замку TTLock.' : 'Заявка отклонена',
+        data: updatedRequest,
+      });
+    } catch (error: any) {
+      console.error('[BookingsController.respondJoinRequest]', error);
+      return res.status(500).json({ success: false, message: error.message });
+    }
+  }
+
+  /**
+   * Host cancels a booking slot (status: 'CANCELLED')
+   */
+  public static async cancelBooking(req: AuthenticatedRequest, res: Response) {
+    try {
+      if (!req.user) return res.status(401).json({ success: false, message: 'Не авторизован' });
+
+      const { id } = req.params;
+
+      const booking = await prisma.booking.findUnique({
+        where: { id },
+        include: { ground: true },
+      });
+
+      if (!booking) {
+        return res.status(404).json({ success: false, message: 'Бронирование не найдено' });
+      }
+
+      if (booking.host_user_id !== req.user.id && req.user.role !== 'admin') {
+        return res.status(403).json({
+          success: false,
+          message: 'Только хозяин бронирования может отменить этот слот',
+        });
+      }
+
+      if (booking.status === 'CANCELLED') {
+        return res.status(400).json({
+          success: false,
+          message: 'Это бронирование уже отменено',
+        });
+      }
+
+      const updatedBooking = await prisma.booking.update({
+        where: { id },
+        data: {
+          status: 'CANCELLED',
+          payment_status: 'refunded',
+        },
+        include: { ground: true },
+      });
+
+      return res.json({
+        success: true,
+        message: 'Бронирование успешно отменено. Доступ к замку аннулирован, а слот освобожден.',
+        data: updatedBooking,
+      });
+    } catch (error: any) {
+      console.error('[BookingsController.cancelBooking]', error);
+      return res.status(500).json({ success: false, message: error.message });
+    }
+  }
+
+  /**
+   * Host removes (kicks) a guest/participant from a booking slot
+   */
+  public static async removeGuest(req: AuthenticatedRequest, res: Response) {
+    try {
+      if (!req.user) return res.status(401).json({ success: false, message: 'Не авторизован' });
+
+      const { bookingId, guestId } = req.params;
+
+      const booking = await prisma.booking.findUnique({
+        where: { id: bookingId },
+      });
+
+      if (!booking) {
+        return res.status(404).json({ success: false, message: 'Бронирование не найдено' });
+      }
+
+      if (booking.host_user_id !== req.user.id && req.user.role !== 'admin') {
+        return res.status(403).json({
+          success: false,
+          message: 'Только хозяин бронирования может удалять участников',
+        });
+      }
+
+      const bookingGuest = await prisma.bookingGuest.findUnique({
+        where: { id: guestId },
+        include: { user: true },
+      });
+
+      if (!bookingGuest || bookingGuest.booking_id !== bookingId) {
+        return res.status(404).json({ success: false, message: 'Участник не найден в данном бронировании' });
+      }
+
+      // Delete the BookingGuest record
+      await prisma.bookingGuest.delete({
+        where: { id: guestId },
+      });
+
+      // Revoke any corresponding JoinRequest for that user on this booking
+      if (bookingGuest.user) {
+        await prisma.joinRequest.updateMany({
+          where: {
+            booking_id: bookingId,
+            OR: [
+              { user_iin: bookingGuest.user.iin },
+              { user_phone: bookingGuest.user.phone_number },
+            ],
+          },
+          data: { status: 'REMOVED' },
+        });
+      }
+
+      return res.json({
+        success: true,
+        message: `Участник "${bookingGuest.user?.full_name || 'Гость'}" успешно удален из слота. Доступ к замку аннулирован.`,
+      });
+    } catch (error: any) {
+      console.error('[BookingsController.removeGuest]', error);
+      return res.status(500).json({ success: false, message: error.message });
+    }
+  }
 }
+
+
+

@@ -13,12 +13,34 @@ export class AuthController {
    */
   public static async register(req: Request, res: Response) {
     try {
-      const { iin, phone_number, full_name, password } = req.body;
+      const { iin, phone_number, phone, full_name, fullName, password, confirmPassword } = req.body;
+      const targetFullName = (full_name || fullName || '').trim();
+      const targetPhone = (phone_number || phone || '').trim();
+      const targetPassword = password || '';
 
-      if (!iin || !phone_number || !full_name || !password) {
+      if (!iin || !targetPhone || !targetFullName || !targetPassword) {
         return res.status(400).json({
           success: false,
           message: 'Все поля (ИИН, номер телефона, ФИО, пароль) обязательны для заполнения',
+        });
+      }
+
+      // Check confirmPassword matching if provided
+      if (confirmPassword !== undefined && targetPassword !== confirmPassword) {
+        return res.status(400).json({
+          success: false,
+          message: 'Пароли не совпадают',
+        });
+      }
+
+      // Password complexity check (length >= 6, letters + digits)
+      const hasLetter = /[a-zA-Zа-яА-Я]/.test(targetPassword);
+      const hasDigit = /[0-9]/.test(targetPassword);
+
+      if (targetPassword.length < 6 || !hasLetter || !hasDigit) {
+        return res.status(400).json({
+          success: false,
+          message: 'Пароль должен быть длиной не менее 6 символов и содержать минимум одну букву и одну цифру',
         });
       }
 
@@ -31,7 +53,7 @@ export class AuthController {
         });
       }
 
-      const formattedPhone = formatRKPhone(phone_number);
+      const formattedPhone = formatRKPhone(targetPhone);
 
       // Check if user already exists
       const existingIin = await prisma.user.findUnique({ where: { iin: iin.trim() } });
@@ -45,14 +67,14 @@ export class AuthController {
       }
 
       // Hash password
-      const password_hash = await bcrypt.hash(password, 10);
+      const password_hash = await bcrypt.hash(targetPassword, 10);
 
       // Create User with auto-computed birth_date & gender from IIN
       const user = await prisma.user.create({
         data: {
           iin: iin.trim(),
           phone_number: formattedPhone,
-          full_name: full_name.trim(),
+          full_name: targetFullName,
           birth_date: iinResult.birthDate,
           gender: iinResult.gender,
           password_hash,
@@ -94,16 +116,16 @@ export class AuthController {
    */
   public static async login(req: Request, res: Response) {
     try {
-      const { phone_or_iin, password } = req.body;
+      const { phone_or_iin, phoneOrIin, password } = req.body;
+      const queryInput = (phone_or_iin || phoneOrIin || '').trim();
 
-      if (!phone_or_iin || !password) {
+      if (!queryInput || !password) {
         return res.status(400).json({
           success: false,
           message: 'Укажите ИИН/Телефон и пароль',
         });
       }
 
-      const queryInput = phone_or_iin.trim();
       const formattedPhone = formatRKPhone(queryInput);
 
       const user = await prisma.user.findFirst({

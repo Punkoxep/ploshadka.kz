@@ -351,6 +351,66 @@
     .alert-success { background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(52, 211, 153, 0.3); }
     .alert-error { background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(248, 113, 113, 0.3); }
     .alert-warning { background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(251, 191, 36, 0.3); }
+
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+
+    .metric-card {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 16px;
+    }
+
+    .metric-title {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+      text-transform: uppercase;
+      font-weight: 700;
+    }
+
+    .metric-val {
+      font-size: 22px;
+      font-weight: 800;
+      color: #fff;
+    }
+
+    .heatmap-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+      gap: 12px;
+      margin-top: 16px;
+    }
+
+    .heatmap-cell {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 12px;
+      text-align: center;
+      transition: all 0.2s ease;
+    }
+
+    .heatmap-cell.level-peak {
+      background: rgba(239, 68, 68, 0.18);
+      border-color: rgba(239, 68, 68, 0.5);
+      box-shadow: 0 0 12px rgba(239, 68, 68, 0.2);
+    }
+
+    .heatmap-cell.level-normal {
+      background: rgba(245, 158, 11, 0.15);
+      border-color: rgba(245, 158, 11, 0.4);
+    }
+
+    .heatmap-cell.level-low {
+      background: rgba(16, 185, 129, 0.1);
+      border-color: rgba(16, 185, 129, 0.25);
+    }
   </style>
 </head>
 <body>
@@ -370,10 +430,16 @@
     <!-- Sidebar / Auth Switcher -->
     <div class="sidebar">
       <div class="card">
-        <div class="card-title">👤 Активный аккаунт</div>
+        <div class="card-title" style="display: flex; justify-content: space-between; align-items: center;">
+          <span>👤 Активный аккаунт</span>
+          <button class="btn" style="width: auto; padding: 4px 8px; font-size: 11px; background: rgba(255,255,255,0.1);" onclick="toggleRegisterModal(true)">+ Игрок</button>
+        </div>
         <div id="usersList">
           <!-- Dynamically populated -->
         </div>
+        <button class="btn btn-secondary" style="margin-top: 12px; font-size: 12px; width: 100%; font-weight: bold;" onclick="toggleRegisterModal(true)">
+          ➕ Зарегистрировать нового игрока
+        </button>
       </div>
 
       <div class="card">
@@ -407,12 +473,17 @@
         <div class="card" style="margin-top: 24px;">
           <div class="card-title">🚪 Симулятор гибридного входа (Разблокировка TTLock)</div>
           <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 16px;">
-            Протестируйте открывание двери кнопкой из приложения или сканированием статичного QR-кода на двери.
+            Протестируйте открывание двери кнопкой из приложения (1-Click) или сканированием статичного QR-кода на двери.
           </p>
+
+          <div id="activeAccessBanner" style="background: rgba(255, 255, 255, 0.03); border: 1px solid var(--card-border); padding: 12px 16px; border-radius: 10px; margin-bottom: 20px; font-size: 13px; color: var(--text-muted);">
+            <div>⚪ Проверка активного доступа...</div>
+          </div>
+
           <div class="grid-2">
             <div>
-              <label>Способ А: Кнопка "Открыть дверь" в приложении</label>
-              <input type="text" id="appUnlockBookingId" placeholder="Введите ID активной брони">
+              <label>Способ А: Кнопка "Открыть дверь" в приложении (1-Click)</label>
+              <input type="text" id="appUnlockBookingId" placeholder="Оставьте пустым для 1-Click автоопределения">
               <button class="btn" style="margin-top: 10px;" onclick="unlockAppButton()">🔓 Открыть дверным замком (Кнопка)</button>
             </div>
 
@@ -493,6 +564,28 @@
           <button class="btn" onclick="createBooking()">Забронировать площадку</button>
         </div>
 
+        <!-- NEW: Occupied Slots & Request to Join -->
+        <div class="card" style="margin-top: 24px;">
+          <div class="card-title">⚽ Занятые слоты (Присоединение к игре)</div>
+          <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 16px;">
+            Любой пользователь может отправить заявку «Попроситься в команду» к хозяину занятого слота.
+          </p>
+          <div id="occupiedSlotsList">
+            <div style="font-size: 13px; color: var(--text-muted);">Загрузка занятых слотов...</div>
+          </div>
+        </div>
+
+        <!-- NEW: Host Incoming Requests -->
+        <div class="card" style="margin-top: 24px;">
+          <div class="card-title">📩 Входящие заявки на присоединение (для Владельца слота)</div>
+          <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 16px;">
+            Хозяин слота принимает или отклоняет заявки от игроков. При одобрении игрок автоматически получает доступ к дверям.
+          </p>
+          <div id="hostIncomingRequestsList">
+            <div style="font-size: 13px; color: var(--text-muted);">Загрузка ваших заявок...</div>
+          </div>
+        </div>
+
         <div class="card" style="margin-top: 24px;">
           <div class="card-title">👥 Приглашение друзей (До 15 человек на слот)</div>
           <div class="grid-2">
@@ -513,10 +606,56 @@
         </div>
       </div>
 
-      <!-- TAB 4: ADMIN MONITORING -->
+      <!-- TAB 4: ADMIN MONITORING & ANALYTICS -->
       <div id="tab-admin" class="tab-content">
         <div class="card">
-          <div class="card-title">⚙️ Мониторинг Wi-Fi шлюзов TTLock & Статистика</div>
+          <div class="card-title">📊 Дашборд администратора / Аналитика сети площадок</div>
+          <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 20px;">
+            Сводные метрики использования спортивных площадок, уникальные игроки (по ИИН) и распределение нагрузки (без финансовых данных).
+          </p>
+
+          <!-- Metric Cards -->
+          <div class="metrics-grid">
+            <div class="metric-card">
+              <div class="metric-title">📈 Загруженность сети</div>
+              <div class="metric-val" id="analyticsOccupancy">-- %</div>
+            </div>
+            <div class="metric-card">
+              <div class="metric-title">👥 Уникальных игроков</div>
+              <div class="metric-val" id="analyticsUniquePlayers">-- чел.</div>
+            </div>
+            <div class="metric-card">
+              <div class="metric-title">🔥 Популярный час</div>
+              <div class="metric-val" style="font-size: 16px; margin-top: 4px;" id="analyticsPopularHour">--:--</div>
+            </div>
+            <div class="metric-card">
+              <div class="metric-title">⚽ Средняя команда</div>
+              <div class="metric-val" id="analyticsAvgTeam">-- чел./слот</div>
+            </div>
+          </div>
+
+          <!-- Heatmap Section -->
+          <div style="margin-top: 24px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+              <h3 style="font-size: 15px; color: #fff;">🔥 Тепловая карта загрузки площадок по часам (08:00 - 23:00)</h3>
+              <select id="analyticsVenueSelect" style="width: 280px;" onchange="loadVenueHeatmap()"></select>
+            </div>
+            <div id="venueHeatmapGrid" class="heatmap-grid">
+              <div style="font-size: 13px; color: var(--text-muted);">Загрузка тепловой карты...</div>
+            </div>
+          </div>
+
+          <!-- Players Analytics Section -->
+          <div style="margin-top: 28px;">
+            <h3 style="font-size: 15px; color: #fff; margin-bottom: 12px;">🪪 Статистика уникальных игроков по ИИН</h3>
+            <div id="venuePlayersAnalytics" class="log-box" style="max-height: 250px;">
+              Загрузка статистики игроков...
+            </div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top: 24px;">
+          <div class="card-title">⚙️ Мониторинг Wi-Fi шлюзов TTLock & Аудит</div>
           <div id="systemStats" style="display: flex; gap: 16px; margin-bottom: 20px;">
             <!-- Stats -->
           </div>
@@ -527,7 +666,7 @@
           </div>
 
           <div class="card-title">📜 Журнал аудита разблокировок замков</div>
-          <div id="lockAuditLogs" class="log-box" style="max-height: 300px;">
+          <div id="lockAuditLogs" class="log-box" style="max-height: 250px;">
             Загрузка логов аудита...
           </div>
         </div>
@@ -554,6 +693,8 @@
       await loginUser(presetUsers[0].phone, 'password123');
       await loadGrounds();
       await loadGateways();
+      await loadOccupiedSlots();
+      await loadHostRequests();
       liveValidateIIN();
     };
 
@@ -583,6 +724,9 @@
           currentUserToken = data.data.token;
           currentUserId = data.data.user.id;
           showAlert(`Авторизован как: ${data.data.user.full_name} (${data.data.user.role})`, 'success');
+          await loadOccupiedSlots();
+          await loadHostRequests();
+          await loadActiveAccess();
         } else {
           showAlert(data.message, 'error');
         }
@@ -597,6 +741,10 @@
       event.target.classList.add('active');
       document.getElementById(tabId).classList.add('active');
       if (tabId === 'tab-admin') loadAdminData();
+      if (tabId === 'tab-bookings') {
+        loadOccupiedSlots();
+        loadHostRequests();
+      }
     }
 
     function showAlert(msg, type = 'success') {
@@ -605,6 +753,247 @@
       box.innerText = msg;
       box.style.display = 'block';
       setTimeout(() => { box.style.display = 'none'; }, 5000);
+    }
+
+    async function loadOccupiedSlots() {
+      const container = document.getElementById('occupiedSlotsList');
+      if (!container) return;
+
+      try {
+        const res = await fetch(`${API_BASE}/bookings/all`);
+        const data = await res.json();
+        if (!data.success || !data.data.length) {
+          container.innerHTML = '<div style="font-size: 13px; color: var(--text-muted);">Нет активных забронированных слотов.</div>';
+          return;
+        }
+
+        const currentActiveUser = presetUsers.find(u => u.phone === activePhone);
+
+        container.innerHTML = data.data.map(b => {
+          const totalParticipants = 1 + (b.guests ? b.guests.length : 0);
+          const isHost = b.host_user_id === currentUserId;
+          const isGuest = b.guests && b.guests.some(g => g.user_id === currentUserId);
+          const myRequest = b.joinRequests && b.joinRequests.find(r => currentActiveUser && r.user_iin === currentActiveUser.iin);
+
+          let actionBtn = '';
+          if (isHost) {
+            actionBtn = `
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <span class="system-badge">👑 Вы хозяин слота</span>
+                <button class="btn btn-danger" style="width: auto; padding: 6px 12px; font-size: 12px;" onclick="cancelBookingSlot('${b.id}')">🚫 Отменить бронь</button>
+              </div>
+            `;
+          } else if (isGuest) {
+            actionBtn = '<span class="system-badge">✅ Вы игрок команды</span>';
+          } else if (myRequest) {
+            if (myRequest.status === 'PENDING') {
+              actionBtn = '<span class="status-pill status-offline">⏳ Заявка отправлена</span>';
+            } else if (myRequest.status === 'APPROVED') {
+              actionBtn = '<span class="status-pill status-online">🎉 Заявка одобрена!</span>';
+            } else {
+              actionBtn = '<span class="status-pill status-offline">❌ Заявка отклонена</span>';
+            }
+          } else {
+            actionBtn = `<button class="btn" style="width: auto; padding: 6px 14px; font-size: 12px;" onclick="requestJoinSlot('${b.id}')">🙋 Попроситься в команду</button>`;
+          }
+
+          let guestsListHtml = '';
+          if (b.guests && b.guests.length > 0) {
+            guestsListHtml = `
+              <div style="margin-top: 8px; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 8px;">
+                <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 4px;">Присоединенные участники:</div>
+                <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+                  ${b.guests.map(g => `
+                    <span style="background: rgba(255,255,255,0.06); padding: 4px 8px; border-radius: 6px; font-size: 12px; display: inline-flex; align-items: center; gap: 6px;">
+                      <span>👤 ${g.user?.full_name || 'Гость'}</span>
+                      ${isHost ? `<button onclick="removeGuestFromSlot('${b.id}', '${g.id}')" title="Удалить из слота" style="background: none; border: none; color: #f87171; font-size: 14px; cursor: pointer; padding: 0 2px; font-weight: bold;">✕</button>` : ''}
+                    </span>
+                  `).join('')}
+                </div>
+              </div>
+            `;
+          }
+
+          return `
+            <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid var(--card-border); padding: 14px; border-radius: 12px; margin-bottom: 10px;">
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                  <div style="font-weight: 700; font-size: 14px; color: #fff;">${b.ground.name}</div>
+                  <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">
+                    📅 ${b.booking_date} (${b.start_time} - ${b.end_time}) | 👤 Хозяин: <b>${b.host_user?.full_name || 'Неизвестен'}</b>
+                  </div>
+                  <div style="font-size: 12px; color: #34d399; margin-top: 4px;">
+                    👥 Участников: <b>${totalParticipants}/15</b>
+                  </div>
+                </div>
+                <div>${actionBtn}</div>
+              </div>
+              ${guestsListHtml}
+            </div>
+          `;
+        }).join('');
+      } catch (err) {
+        container.innerHTML = '<div style="font-size: 13px; color: #f87171;">Ошибка загрузки слотов</div>';
+      }
+    }
+
+    async function loadHostRequests() {
+      const container = document.getElementById('hostIncomingRequestsList');
+      if (!container) return;
+
+      try {
+        const currentActiveUser = presetUsers.find(u => u.phone === activePhone);
+        const headers = { 'Authorization': `Bearer ${currentUserToken}` };
+        if (currentActiveUser) headers['x-user-iin'] = currentActiveUser.iin;
+
+        const res = await fetch(`${API_BASE}/bookings/requests`, { headers });
+        const data = await res.json();
+        
+        if (!data.success || !data.data || !data.data.length) {
+          container.innerHTML = '<div style="font-size: 13px; color: var(--text-muted);">Входящих заявок на присоединение нет.</div>';
+          return;
+        }
+
+        container.innerHTML = data.data.map(r => {
+          let statusBadge = '';
+          let actionButtons = '';
+          if (r.status === 'PENDING_SPONTANEOUS') {
+            statusBadge = '<span class="status-pill status-offline" style="background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.4);">⚡ Спонтанный вход у калитки</span>';
+            actionButtons = `
+              <button class="btn" style="width: auto; padding: 6px 12px; font-size: 12px; background: linear-gradient(135deg, #10b981, #059669);" onclick="respondJoinRequest('${r.id}', 'APPROVED')">✅ Принять & Открыть замок</button>
+              <button class="btn btn-danger" style="width: auto; padding: 6px 12px; font-size: 12px; margin-left: 6px;" onclick="respondJoinRequest('${r.id}', 'REJECTED')">❌ Отклонить</button>
+            `;
+          } else if (r.status === 'PENDING') {
+            statusBadge = '<span class="status-pill status-offline">⏳ На рассмотрении</span>';
+            actionButtons = `
+              <button class="btn" style="width: auto; padding: 6px 12px; font-size: 12px; background: linear-gradient(135deg, #10b981, #059669);" onclick="respondJoinRequest('${r.id}', 'APPROVED')">✅ Принять</button>
+              <button class="btn btn-danger" style="width: auto; padding: 6px 12px; font-size: 12px; margin-left: 6px;" onclick="respondJoinRequest('${r.id}', 'REJECTED')">❌ Отклонить</button>
+            `;
+          } else if (r.status === 'APPROVED') {
+            statusBadge = '<span class="status-pill status-online">✅ Одобрено</span>';
+          } else {
+            statusBadge = '<span class="status-pill status-offline">❌ Отклонено</span>';
+          }
+
+          const groundName = r.booking?.ground?.name || 'Спортивная площадка';
+          const bookingDate = r.booking?.booking_date || '';
+          const bookingTime = r.booking ? `${r.booking.start_time} - ${r.booking.end_time}` : '';
+          const applicantFullName = (r.user_name && !r.user_name.includes('?')) ? r.user_name : (r.user?.full_name || 'Участник');
+
+          return `
+            <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid var(--card-border); padding: 14px; border-radius: 12px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;">
+              <div>
+                <div style="font-weight: 700; font-size: 14px; color: #fff;">👤 ${applicantFullName}</div>
+                <div style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">
+                  ИИН: <b>${r.user_iin}</b> | Тел: <b>${r.user_phone}</b>
+                </div>
+                <div style="font-size: 12px; color: #60a5fa; margin-top: 4px;">
+                  🏟️ ${groundName} (${bookingDate} ${bookingTime})
+                </div>
+              </div>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                ${statusBadge}
+                ${actionButtons}
+              </div>
+            </div>
+          `;
+        }).join('');
+      } catch (err) {
+        container.innerHTML = '<div style="font-size: 13px; color: #f87171;">Ошибка загрузки входящих заявок</div>';
+      }
+    }
+
+    async function requestJoinSlot(bookingId) {
+      try {
+        const res = await fetch(`${API_BASE}/bookings/${bookingId}/request-join`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${currentUserToken}`
+          }
+        });
+        const data = await res.json();
+        if (data.success) {
+          showAlert(data.message, 'success');
+          await loadOccupiedSlots();
+          await loadHostRequests();
+        } else {
+          showAlert(data.message, 'error');
+        }
+      } catch (err) {
+        showAlert('Ошибка: ' + err.message, 'error');
+      }
+    }
+
+    async function respondJoinRequest(requestId, status) {
+      try {
+        const res = await fetch(`${API_BASE}/bookings/requests/${requestId}/respond`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${currentUserToken}`
+          },
+          body: JSON.stringify({ status })
+        });
+        const data = await res.json();
+        if (data.success) {
+          showAlert(data.message, 'success');
+          await loadOccupiedSlots();
+          await loadHostRequests();
+        } else {
+          showAlert(data.message, 'error');
+        }
+      } catch (err) {
+        showAlert('Ошибка: ' + err.message, 'error');
+      }
+    }
+
+    async function cancelBookingSlot(bookingId) {
+      if (!confirm('Вы действительно хотите отменить это бронирование? Права доступа к замкам будут аннулированы, а слот станет доступным для других.')) return;
+
+      try {
+        const res = await fetch(`${API_BASE}/bookings/${bookingId}/cancel`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${currentUserToken}`
+          }
+        });
+        const data = await res.json();
+        if (data.success) {
+          showAlert(data.message, 'success');
+          await loadOccupiedSlots();
+          await loadHostRequests();
+          if (typeof loadAdminAnalytics === 'function') await loadAdminAnalytics();
+        } else {
+          showAlert(data.message, 'error');
+        }
+      } catch (err) {
+        showAlert('Ошибка отмены: ' + err.message, 'error');
+      }
+    }
+
+    async function removeGuestFromSlot(bookingId, guestId) {
+      if (!confirm('Вы действительно хотите удалить этого участника из слота? Права доступа к замкам будут мгновенно аннулированы.')) return;
+
+      try {
+        const res = await fetch(`${API_BASE}/bookings/${bookingId}/guests/${guestId}`, {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${currentUserToken}`
+          }
+        });
+        const data = await res.json();
+        if (data.success) {
+          showAlert(data.message, 'success');
+          await loadOccupiedSlots();
+          await loadHostRequests();
+          if (typeof loadAdminAnalytics === 'function') await loadAdminAnalytics();
+        } else {
+          showAlert(data.message, 'error');
+        }
+      } catch (err) {
+        showAlert('Ошибка удаления участника: ' + err.message, 'error');
+      }
     }
 
     async function loadGrounds() {
@@ -747,17 +1136,66 @@
     }
 
     async function unlockAppButton() {
-      const booking_id = document.getElementById('appUnlockBookingId').value;
-      const res = await fetch(`${API_BASE}/locks/unlock-button`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${currentUserToken}`
-        },
-        body: JSON.stringify({ booking_id })
-      });
-      const data = await res.json();
-      document.getElementById('lockResponseLog').innerText = JSON.stringify(data, null, 2);
+      const booking_id = document.getElementById('appUnlockBookingId').value.trim();
+      const bodyObj = booking_id ? { booking_id } : {};
+
+      try {
+        const res = await fetch(`${API_BASE}/locks/unlock-button`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${currentUserToken}`
+          },
+          body: JSON.stringify(bodyObj)
+        });
+        const data = await res.json();
+        document.getElementById('lockResponseLog').innerText = JSON.stringify(data, null, 2);
+        if (data.success) {
+          showAlert(data.message || 'Дверь успешно разблокирована!', 'success');
+        } else {
+          showAlert(data.message, 'error');
+        }
+      } catch (err) {
+        showAlert('Ошибка разблокировки: ' + err.message, 'error');
+      }
+    }
+
+    async function loadActiveAccess() {
+      const banner = document.getElementById('activeAccessBanner');
+      if (!banner) return;
+
+      try {
+        const res = await fetch(`${API_BASE}/locks/active-access`, {
+          headers: { 'Authorization': `Bearer ${currentUserToken}` }
+        });
+        const data = await res.json();
+
+        if (data.success && data.hasAccess) {
+          const d = data.data;
+          banner.style.background = 'rgba(16, 185, 129, 0.12)';
+          banner.style.borderColor = 'rgba(16, 185, 129, 0.4)';
+          banner.style.color = '#34d399';
+          banner.innerHTML = `
+            <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+              <div>
+                🟢 <b>У вас есть активный доступ к площадке!</b><br>
+                <span style="font-size: 12px; color: #a7f3d0;">🏟️ ${d.ground_name} (${d.timeSlot}) | 👤 ${d.role}</span>
+              </div>
+              <button class="btn" style="width: auto; padding: 6px 14px; font-size: 12px; background: linear-gradient(135deg, #10b981, #059669);" onclick="unlockAppButton()">🔓 1-Click Открыть</button>
+            </div>
+          `;
+          if (d.qr_code_token) {
+            document.getElementById('qrUnlockTokenSelect').value = d.qr_code_token;
+          }
+        } else {
+          banner.style.background = 'rgba(255, 255, 255, 0.03)';
+          banner.style.borderColor = 'var(--card-border)';
+          banner.style.color = 'var(--text-muted)';
+          banner.innerHTML = `<div>⚪ У вас нет активных бронирований на текущее время. Доступ будет предоставлен в время забронированного сеанса.</div>`;
+        }
+      } catch (err) {
+        banner.innerHTML = `<div>⚪ Статус доступа не определен</div>`;
+      }
     }
 
     async function unlockQrCode() {
@@ -775,24 +1213,96 @@
     }
 
     async function loadAdminData() {
+      await loadAdminAnalytics();
+
       const res = await fetch(`${API_BASE}/admin/gateways`);
       const data = await res.json();
-      if (!data.success) return;
-
-      const ctrl = document.getElementById('adminGatewaysControl');
-      ctrl.innerHTML = data.data.map(gw => `
-        <div style="display:flex; justify-content:space-between; align-items:center; background:rgba(255,255,255,0.05); padding:10px; border-radius:8px; margin-bottom:8px;">
-          <div><b>${gw.gateway_name}</b> (Статус: ${gw.status})</div>
-          <button class="${gw.status === 'online' ? 'btn btn-danger' : 'btn'}" style="width:auto; padding:6px 12px;" onclick="toggleGateway('${gw.id}', '${gw.status === 'online' ? 'offline' : 'online'}')">
-            Переключить в ${gw.status === 'online' ? 'ОФЛАЙН (Сбой 5G)' : 'ОНЛАЙН'}
-          </button>
-        </div>
-      `).join('');
+      if (data.success) {
+        const ctrl = document.getElementById('adminGatewaysControl');
+        ctrl.innerHTML = data.data.map(gw => `
+          <div style="display:flex; justify-content:space-between; align-items:center; background:rgba(255,255,255,0.05); padding:10px; border-radius:8px; margin-bottom:8px;">
+            <div><b>${gw.gateway_name}</b> (Статус: ${gw.status})</div>
+            <button class="${gw.status === 'online' ? 'btn btn-danger' : 'btn'}" style="width:auto; padding:6px 12px;" onclick="toggleGateway('${gw.id}', '${gw.status === 'online' ? 'offline' : 'online'}')">
+              Переключить в ${gw.status === 'online' ? 'ОФЛАЙН (Сбой 5G)' : 'ОНЛАЙН'}
+            </button>
+          </div>
+        `).join('');
+      }
 
       const logRes = await fetch(`${API_BASE}/admin/lock-logs`);
       const logData = await logRes.json();
       if (logData.success) {
         document.getElementById('lockAuditLogs').innerText = JSON.stringify(logData.data, null, 2);
+      }
+    }
+
+    async function loadAdminAnalytics() {
+      try {
+        const res = await fetch(`${API_BASE}/admin/analytics/overview`);
+        const data = await res.json();
+        if (data.success) {
+          const d = data.data;
+          document.getElementById('analyticsOccupancy').innerText = `${d.occupancyPercentage}%`;
+          document.getElementById('analyticsUniquePlayers').innerText = `${d.uniquePlayersCount} чел.`;
+          document.getElementById('analyticsPopularHour').innerText = d.mostPopularHour;
+          document.getElementById('analyticsAvgTeam').innerText = `${d.averageTeamSize} чел.`;
+        }
+
+        const groundsRes = await fetch(`${API_BASE}/grounds`);
+        const groundsData = await groundsRes.json();
+        if (groundsData.success) {
+          const select = document.getElementById('analyticsVenueSelect');
+          select.innerHTML = groundsData.data.map(g => `<option value="${g.id}">${g.name}</option>`).join('');
+          if (groundsData.data.length) {
+            await loadVenueHeatmap();
+            await loadVenuePlayers();
+          }
+        }
+      } catch (err) {
+        console.error('Analytics load error:', err);
+      }
+    }
+
+    async function loadVenueHeatmap() {
+      const select = document.getElementById('analyticsVenueSelect');
+      if (!select) return;
+      const venueId = select.value;
+      if (!venueId) return;
+
+      const container = document.getElementById('venueHeatmapGrid');
+      try {
+        const res = await fetch(`${API_BASE}/admin/analytics/venues/${venueId}/heatmap`);
+        const data = await res.json();
+        if (data.success) {
+          const d = data.data;
+          container.innerHTML = d.hourlyMatrix.map(slot => `
+            <div class="heatmap-cell level-${slot.level}">
+              <div style="font-size: 13px; font-weight: 700; color: #fff;">${slot.timeSlot}</div>
+              <div style="font-size: 12px; margin-top: 4px;">📅 Слотов: <b>${slot.bookingsCount}</b></div>
+              <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">👥 Игроков: ${slot.totalPlayers}</div>
+            </div>
+          `).join('');
+        }
+      } catch (err) {
+        container.innerHTML = '<div style="font-size: 13px; color: #f87171;">Ошибка загрузки тепловой карты</div>';
+      }
+    }
+
+    async function loadVenuePlayers() {
+      const select = document.getElementById('analyticsVenueSelect');
+      if (!select) return;
+      const venueId = select.value;
+      if (!venueId) return;
+
+      const container = document.getElementById('venuePlayersAnalytics');
+      try {
+        const res = await fetch(`${API_BASE}/admin/analytics/venues/${venueId}/players`);
+        const data = await res.json();
+        if (data.success) {
+          container.innerText = JSON.stringify(data.data, null, 2);
+        }
+      } catch (err) {
+        container.innerText = 'Ошибка загрузки игроков';
       }
     }
 
@@ -805,6 +1315,205 @@
       await loadGateways();
       await loadAdminData();
     }
+
+    async function submitRegistration() {
+      const iin = document.getElementById('testIinInput').value.trim();
+      const fullName = document.getElementById('regFullName').value.trim();
+      const phone = document.getElementById('regPhone').value.trim();
+      const password = document.getElementById('regPassword').value;
+
+      if (!iin || !fullName || !phone || !password) {
+        showAlert('Заполните все поля (ИИН, ФИО, Телефон, Пароль)', 'error');
+        return;
+      }
+
+      try {
+        const res = await fetch(`${API_BASE}/auth/register`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ iin, fullName, phone, password, confirmPassword: password })
+        });
+        const data = await res.json();
+        if (data.success) {
+          showAlert(`Пользователь "${fullName}" успешно зарегистрирован!`, 'success');
+          const formattedPhone = data.data.user?.phone_number || phone;
+          presetUsers.push({
+            iin,
+            name: fullName,
+            phone: formattedPhone,
+            role: 'client'
+          });
+          renderUserPills();
+          await loginUser(formattedPhone, password);
+        } else {
+          showAlert(data.message, 'error');
+        }
+      } catch (err) {
+        showAlert('Ошибка регистрации: ' + err.message, 'error');
+      }
+    }
+
+    function toggleRegisterModal(show) {
+      const modal = document.getElementById('registerUserModal');
+      modal.style.display = show ? 'flex' : 'none';
+      if (show) validateModalIin();
+    }
+
+    async function validateModalIin() {
+      const iin = document.getElementById('modalRegIin').value;
+      const statusBox = document.getElementById('modalIinStatus');
+      if (!statusBox) return;
+
+      if (iin.length !== 12) {
+        statusBox.innerText = `Длина: ${iin.length}/12 цифр`;
+        statusBox.style.color = 'var(--text-muted)';
+        return;
+      }
+
+      try {
+        const res = await fetch(`${API_BASE}/iin/validate`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ iin })
+        });
+        const data = await res.json();
+        if (data.success && data.data.isValid) {
+          const genderText = data.data.gender === 'male' ? 'Мужской' : 'Женский';
+          statusBox.innerHTML = `✅ <b>ИИН валиден</b> (${genderText})`;
+          statusBox.style.color = '#34d399';
+        } else {
+          statusBox.innerHTML = `❌ ${data.data?.error || 'Неверный ИИН'}`;
+          statusBox.style.color = '#f87171';
+        }
+      } catch (err) {
+        statusBox.innerText = 'Ошибка проверки ИИН';
+      }
+    }
+
+    function liveValidateModalPass() {
+      const pass = document.getElementById('modalRegPassword').value;
+      const confirmPass = document.getElementById('modalRegConfirmPassword').value;
+      return validatePasswordComplexity(pass, confirmPass, 'modalPassStatus');
+    }
+
+    function liveValidateTabPass() {
+      const pass = document.getElementById('regPassword').value;
+      const confirmPass = document.getElementById('regConfirmPassword') ? document.getElementById('regConfirmPassword').value : pass;
+      return validatePasswordComplexity(pass, confirmPass, 'regPassStatus');
+    }
+
+    function validatePasswordComplexity(pass, confirmPass, statusElementId) {
+      const el = document.getElementById(statusElementId);
+      if (!el) return false;
+
+      const lenValid = pass.length >= 6;
+      const letterValid = /[a-zA-Zа-яА-Я]/.test(pass);
+      const digitValid = /[0-9]/.test(pass);
+      const complexityValid = letterValid && digitValid;
+      const matchValid = confirmPass.length > 0 && pass === confirmPass;
+
+      let html = `
+        <div style="display: flex; gap: 12px; font-size: 11px; margin-top: 4px;">
+          <span>${lenValid ? '🟢' : '🔴'} Длина ≥ 6</span>
+          <span>${complexityValid ? '🟢' : '🔴'} Буква и цифра</span>
+          <span>${matchValid ? '🟢' : '🔴'} Совпадают</span>
+        </div>
+      `;
+      el.innerHTML = html;
+
+      return lenValid && complexityValid && matchValid;
+    }
+
+    async function submitModalUserRegistration() {
+      const fullName = document.getElementById('modalRegFullName').value.trim();
+      const iin = document.getElementById('modalRegIin').value.trim();
+      const phone = document.getElementById('modalRegPhone').value.trim();
+      const password = document.getElementById('modalRegPassword').value;
+      const confirmPassword = document.getElementById('modalRegConfirmPassword').value;
+
+      if (!fullName || !iin || !phone || !password || !confirmPassword) {
+        showAlert('Заполните все поля (ФИО, ИИН, Телефон, Пароль, Подтверждение)', 'error');
+        return;
+      }
+
+      if (password !== confirmPassword) {
+        showAlert('Введенные пароли не совпадают!', 'error');
+        return;
+      }
+
+      try {
+        const res = await fetch(`${API_BASE}/auth/register`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fullName, iin, phone, password, confirmPassword })
+        });
+        const data = await res.json();
+
+        if (data.success) {
+          showAlert(`Пользователь "${fullName}" успешно зарегистрирован!`, 'success');
+          
+          const formattedPhone = data.data.user?.phone_number || phone;
+          presetUsers.push({
+            iin,
+            name: fullName,
+            phone: formattedPhone,
+            role: 'client'
+          });
+
+          toggleRegisterModal(false);
+          renderUserPills();
+          await loginUser(formattedPhone, password);
+        } else {
+          showAlert(data.message, 'error');
+        }
+      } catch (err) {
+        showAlert('Ошибка регистрации: ' + err.message, 'error');
+      }
+    }
   </script>
+
+  <!-- Modal for registering new user -->
+  <div id="registerUserModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.75); z-index: 9999; align-items: center; justify-content: center; backdrop-filter: blur(4px);">
+    <div style="background: var(--card-bg); border: 1px solid var(--card-border); width: 90%; max-width: 460px; border-radius: 16px; padding: 24px; box-shadow: 0 20px 40px rgba(0,0,0,0.5);">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+        <h3 style="font-size: 16px; color: #fff; margin: 0;">➕ Регистрация нового игрока</h3>
+        <button onclick="toggleRegisterModal(false)" style="background: none; border: none; color: var(--text-muted); font-size: 20px; cursor: pointer;">✕</button>
+      </div>
+
+      <div class="form-group" style="margin-bottom: 10px;">
+        <label>ФИО игрока</label>
+        <input type="text" id="modalRegFullName" placeholder="Например: Аскар Ермеков" value="Аскар Ермеков">
+      </div>
+
+      <div class="form-group" style="margin-bottom: 10px;">
+        <label>ИИН РК (12 цифр)</label>
+        <input type="text" id="modalRegIin" placeholder="Например: 980315350221" value="980315350221" oninput="validateModalIin()">
+        <div id="modalIinStatus" style="font-size: 11px; margin-top: 4px; color: var(--text-muted);">Введите 12 цифр ИИН...</div>
+      </div>
+
+      <div class="form-group" style="margin-bottom: 10px;">
+        <label>Номер телефона РК</label>
+        <input type="text" id="modalRegPhone" placeholder="+77071112233" value="+77071112233">
+      </div>
+
+      <div class="grid-2" style="margin-bottom: 8px;">
+        <div class="form-group">
+          <label>Пароль</label>
+          <input type="password" id="modalRegPassword" placeholder="Буквы + цифры" value="Pass123" oninput="liveValidateModalPass()">
+        </div>
+        <div class="form-group">
+          <label>Подтверждение</label>
+          <input type="password" id="modalRegConfirmPassword" placeholder="Повторите" value="Pass123" oninput="liveValidateModalPass()">
+        </div>
+      </div>
+
+      <div id="modalPassStatus" style="margin-bottom: 16px;"></div>
+
+      <div style="display: flex; gap: 10px;">
+        <button class="btn" onclick="submitModalUserRegistration()" style="flex: 1;">Зарегистрировать & Авторизовать</button>
+        <button class="btn btn-secondary" onclick="toggleRegisterModal(false)" style="width: auto;">Отмена</button>
+      </div>
+    </div>
+  </div>
 </body>
 </html>
