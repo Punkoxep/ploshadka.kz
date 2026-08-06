@@ -3,6 +3,7 @@ import { AuthController } from '../controllers/authController';
 import { GroundsController } from '../controllers/groundsController';
 import { BookingsController } from '../controllers/bookingsController';
 import { LocksController } from '../controllers/locksController';
+import { TTLockController } from '../controllers/ttlockController';
 import { AdminController } from '../controllers/adminController';
 import { authenticateJwt, requireAdmin } from '../middlewares/authMiddleware';
 import { validateIIN } from '../utils/iinValidator';
@@ -54,6 +55,7 @@ router.post('/bookings/spontaneous-join', authenticateJwt, BookingsController.sp
 router.post('/grounds/qr-check-in', authenticateJwt, BookingsController.spontaneousQrCheckIn as any);
 
 // --- Hybrid Door Entry Access Control (TTLock) ---
+router.post('/ttlock/callback', TTLockController.handleCallback as any);
 router.post('/locks/unlock', authenticateJwt, LocksController.unlockByAppButton as any);
 router.post('/locks/unlock-button', authenticateJwt, LocksController.unlockByAppButton as any);
 router.post('/locks/unlock-qr', authenticateJwt, LocksController.unlockByDoorQr as any);
