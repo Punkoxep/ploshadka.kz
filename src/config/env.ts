@@ -10,8 +10,8 @@ export const ENV = {
   TTLOCK_CLIENT_SECRET: process.env.TTLOCK_CLIENT_SECRET || 'c84465e4a4b15d8cc39fb83eb5a51f88',
   TTLOCK_API_BASE_URL: process.env.TTLOCK_API_BASE_URL || 'https://euapi.ttlock.com',
   TTLOCK_API_URL: process.env.TTLOCK_API_URL || 'https://euapi.ttlock.com',
-  TTLOCK_USERNAME: process.env.TTLOCK_USERNAME || 'admin_ttlock',
-  TTLOCK_PASSWORD_MD5: process.env.TTLOCK_PASSWORD_MD5 || 'e10adc3949ba59abbe56e057f20f883e',
+  TTLOCK_MASTER_USERNAME: process.env.TTLOCK_MASTER_USERNAME || 'punkoxep@gmail.com',
+  TTLOCK_MASTER_PASSWORD: process.env.TTLOCK_MASTER_PASSWORD || 'Punkoxep169254131!',
   TTLOCK_MODE: process.env.TTLOCK_MODE || 'mock',
   CRON_GATEWAY_MONITOR: process.env.CRON_GATEWAY_MONITOR || '*/3 * * * *',
 };

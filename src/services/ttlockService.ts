@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import { ENV } from '../config/env';
 import { prisma } from '../config/prisma';
 
@@ -50,6 +51,7 @@ export class TTLockService {
   /**
    * Fetch OAuth 2.0 Access Token from TTLock Cloud OpenAPI
    * POST /oauth2/token
+   * Credentials: client_id, client_secret, username (master email), password (lower-case MD5 hash), grant_type="password"
    */
   public static async getAccessToken(): Promise<string> {
     const now = Date.now();
@@ -64,14 +66,21 @@ export class TTLockService {
       return this.cachedAccessToken;
     }
 
-    console.log(`[TTLockService] Fetching fresh OAuth2 Access Token from ${ENV.TTLOCK_API_BASE_URL}/oauth2/token...`);
+    // Compute lowercase MD5 hash of Master Password
+    const passwordMd5 = crypto
+      .createHash('md5')
+      .update(ENV.TTLOCK_MASTER_PASSWORD || '')
+      .digest('hex')
+      .toLowerCase();
+
+    console.log(`[TTLockService] Requesting OAuth2 Access Token for master user "${ENV.TTLOCK_MASTER_USERNAME}" from ${ENV.TTLOCK_API_BASE_URL}/oauth2/token...`);
 
     const params = new URLSearchParams({
       client_id: ENV.TTLOCK_CLIENT_ID,
       client_secret: ENV.TTLOCK_CLIENT_SECRET,
       grant_type: 'password',
-      username: ENV.TTLOCK_USERNAME,
-      password: ENV.TTLOCK_PASSWORD_MD5,
+      username: ENV.TTLOCK_MASTER_USERNAME,
+      password: passwordMd5,
     });
 
     try {
@@ -87,11 +96,18 @@ export class TTLockService {
         this.cachedAccessToken = data.access_token;
         const expiresIn = (data.expires_in || 7200) * 1000;
         this.tokenExpiresAt = now + expiresIn;
-        console.log(`[TTLockService] OAuth2 Token acquired successfully. Expires in ${data.expires_in}s.`);
+
+        console.log(`=======================================================`);
+        console.log(`🔑 [TTLockService] OAuth2 access_token acquired successfully!`);
+        console.log(`Master Account: ${ENV.TTLOCK_MASTER_USERNAME}`);
+        console.log(`Access Token: ${data.access_token}`);
+        console.log(`Expires In: ${data.expires_in || 7200} seconds`);
+        console.log(`=======================================================`);
+
         return this.cachedAccessToken!;
       } else {
-        console.error(`[TTLockService] OAuth2 Token Request failed:`, data);
-        throw new Error(data?.errmsg || data?.error_description || 'Не удалось получить OAuth2 токен TTLock');
+        console.error(`[TTLockService] OAuth2 Token Request Error:`, data);
+        throw new Error(data?.errmsg || data?.error_description || `Ошибка токена TTLock (Код: ${data?.errcode || 'Unknown'})`);
       }
     } catch (err: any) {
       console.error(`[TTLockService] OAuth2 token fetch exception: ${err.message}`);
