@@ -8,6 +8,7 @@
     "start": "node dist/server.js",
     "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
     "test": "ts-node src/utils/iinValidator.test.ts",
+    "test:e2e": "ts-node src/tests/e2e.test.ts",
     "prisma:generate": "prisma generate",
     "prisma:db-push": "prisma db push",
     "prisma:seed": "ts-node prisma/seed.ts"
