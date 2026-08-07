@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import { ENV } from '../config/env';
 import { prisma } from '../config/prisma';
+import { Logger } from '../utils/logger';
 
 export interface TTLockUnlockResponse {
   success: boolean;
@@ -46,36 +47,42 @@ export class TTLockService {
    * Set operating mode dynamically ('mock' | 'real')
    */
   public static setMode(mode: 'mock' | 'real'): void {
-    console.log(`[TTLockService] Switching operating mode from "${this.currentMode}" to "${mode}"`);
+    Logger.info(`Switching TTLock operating mode from "${this.currentMode}" to "${mode}"`);
     this.currentMode = mode;
   }
 
   /**
    * Fetch OAuth 2.0 Access Token from TTLock Cloud OpenAPI
    * POST /oauth2/token
-   * Credentials: client_id, client_secret, username (master email), password (lower-case MD5 hash), grant_type="password"
+   * Credentials: client_id, client_secret, username, password (lower-case MD5 hash), grant_type="password"
    */
   public static async getAccessToken(): Promise<string> {
     const now = Date.now();
-    // Return cached token if valid for at least another 60 seconds
+
+    // Cache Optimization: return cached token if valid for at least 60s
     if (this.cachedAccessToken && this.tokenExpiresAt > now + 60000) {
       return this.cachedAccessToken;
     }
 
     if (this.currentMode === 'mock') {
-      this.cachedAccessToken = 'MOCK_TTLOCK_ACCESS_TOKEN_' + Date.now();
+      this.cachedAccessToken = 'MOCK_TTLOCK_ACCESS_TOKEN_' + now;
       this.tokenExpiresAt = now + 7200 * 1000;
       return this.cachedAccessToken;
+    }
+
+    if (!ENV.TTLOCK_CLIENT_ID || !ENV.TTLOCK_CLIENT_SECRET || !ENV.TTLOCK_MASTER_USERNAME || !ENV.TTLOCK_MASTER_PASSWORD) {
+      Logger.warn('TTLock credentials missing in process.env. Using fallback OAuth mode.');
+      throw new Error('Учетные данные TTLock API не заданы в .env');
     }
 
     // Compute lowercase MD5 hash of Master Password
     const passwordMd5 = crypto
       .createHash('md5')
-      .update(ENV.TTLOCK_MASTER_PASSWORD || '')
+      .update(ENV.TTLOCK_MASTER_PASSWORD)
       .digest('hex')
       .toLowerCase();
 
-    console.log(`[TTLockService] Requesting OAuth2 Access Token for master user "${ENV.TTLOCK_MASTER_USERNAME}" from ${ENV.TTLOCK_API_BASE_URL}/oauth2/token...`);
+    Logger.info(`Requesting OAuth2 Access Token for master user "${ENV.TTLOCK_MASTER_USERNAME}" from ${ENV.TTLOCK_API_BASE_URL}/oauth2/token...`);
 
     const params = new URLSearchParams({
       client_id: ENV.TTLOCK_CLIENT_ID,
@@ -99,20 +106,14 @@ export class TTLockService {
         const expiresIn = (data.expires_in || 7200) * 1000;
         this.tokenExpiresAt = now + expiresIn;
 
-        console.log(`=======================================================`);
-        console.log(`🔑 [TTLockService] OAuth2 access_token acquired successfully!`);
-        console.log(`Master Account: ${ENV.TTLOCK_MASTER_USERNAME}`);
-        console.log(`Access Token: ${data.access_token}`);
-        console.log(`Expires In: ${data.expires_in || 7200} seconds`);
-        console.log(`=======================================================`);
-
+        Logger.info(`OAuth2 access_token acquired successfully for "${ENV.TTLOCK_MASTER_USERNAME}". Expires in ${data.expires_in || 7200}s.`);
         return this.cachedAccessToken!;
       } else {
-        console.error(`[TTLockService] OAuth2 Token Request Error:`, data);
+        Logger.error(`OAuth2 Token Request Error`, data);
         throw new Error(data?.errmsg || data?.error_description || `Ошибка токена TTLock (Код: ${data?.errcode || 'Unknown'})`);
       }
     } catch (err: any) {
-      console.error(`[TTLockService] OAuth2 token fetch exception: ${err.message}`);
+      Logger.error(`OAuth2 token fetch exception`, err);
       throw err;
     }
   }
@@ -126,9 +127,9 @@ export class TTLockService {
     isGatewayOnline: boolean = true,
     bookingDetails?: { booking_id?: string; ground_name?: string }
   ): Promise<TTLockUnlockResponse> {
-    console.log(`[TTLockService] Unlock attempt for lockId: ${lockId}, Mode: ${this.currentMode}, Gateway Online: ${isGatewayOnline}`);
+    Logger.info(`Unlock attempt for lockId: ${lockId}, Mode: ${this.currentMode}, Gateway Online: ${isGatewayOnline}`);
 
-    // --- 1. MOCK MODE (MOCK) ---
+    // --- 1. MOCK MODE ---
     if (this.currentMode === 'mock') {
       const msg = 'Эмулятор TTLock: Дверь успешно открыта по Wi-Fi/5G шлюзу (Mock)';
       return {
@@ -147,9 +148,9 @@ export class TTLockService {
       };
     }
 
-    // --- 2. LIVE MODE (REAL) ---
+    // --- 2. LIVE MODE ---
     if (!isGatewayOnline) {
-      console.warn(`[TTLockService] Gateway is offline for lock ${lockId}. Switching to Offline Failover Mode...`);
+      Logger.warn(`Gateway is offline for lock ${lockId}. Switching to Offline Failover Mode...`);
       return this.generateOfflineFallback(lockId, 'Шлюз 5G/Wi-Fi не в сети');
     }
 
@@ -163,7 +164,7 @@ export class TTLockService {
         date: Date.now().toString(),
       });
 
-      console.log(`[TTLockService] Sending real unlock request to ${ENV.TTLOCK_API_BASE_URL}/v3/lock/unlock...`);
+      Logger.info(`Sending real unlock request to ${ENV.TTLOCK_API_BASE_URL}/v3/lock/unlock...`);
 
       const response = await fetch(`${ENV.TTLOCK_API_BASE_URL}/v3/lock/unlock`, {
         method: 'POST',
@@ -190,11 +191,11 @@ export class TTLockService {
           },
         };
       } else {
-        console.warn(`[TTLockService] Real TTLock API error code ${data?.errcode}: ${data?.errmsg}. Falling back to offline PIN.`);
+        Logger.warn(`Real TTLock API error code ${data?.errcode}: ${data?.errmsg}. Falling back to offline PIN.`);
         return this.generateOfflineFallback(lockId, data?.errmsg || `Ошибка TTLock API (Код ${data?.errcode})`);
       }
     } catch (error: any) {
-      console.error(`[TTLockService] Real Cloud unlock request failed: ${error.message}`);
+      Logger.error(`Real Cloud unlock request failed`, error);
       return this.generateOfflineFallback(lockId, error.message);
     }
   }
@@ -209,7 +210,7 @@ export class TTLockService {
     endDateMs: number,
     passcodeName: string = 'Booking PIN'
   ): Promise<TTLockPasscodeResponse> {
-    console.log(`[TTLockService] Requesting passcode for lockId: ${lockId}, Mode: ${this.currentMode}`);
+    Logger.info(`Requesting passcode for lockId: ${lockId}, Mode: ${this.currentMode}`);
 
     if (this.currentMode === 'mock') {
       const mockPin = String(Math.floor(100000 + Math.random() * 900000));
@@ -231,14 +232,12 @@ export class TTLockService {
         clientId: ENV.TTLOCK_CLIENT_ID,
         accessToken: accessToken,
         lockId: lockId,
-        keyboardPwdType: '3', // 3 = Period passcode (valid for start to end date)
+        keyboardPwdType: '3',
         keyboardPwdName: passcodeName,
         startDate: startDateMs.toString(),
         endDate: endDateMs.toString(),
         date: Date.now().toString(),
       });
-
-      console.log(`[TTLockService] Requesting passcode from ${ENV.TTLOCK_API_BASE_URL}/v3/keyboardPwd/get...`);
 
       const response = await fetch(`${ENV.TTLOCK_API_BASE_URL}/v3/keyboardPwd/get`, {
         method: 'POST',
@@ -259,8 +258,7 @@ export class TTLockService {
           rawResponse: data,
         };
       } else {
-        console.warn(`[TTLockService] Passcode generation error code ${data?.errcode}: ${data?.errmsg}`);
-        // Fallback local passcode
+        Logger.warn(`Passcode generation error code ${data?.errcode}: ${data?.errmsg}`);
         const fallbackPin = String((parseInt(lockId.replace(/\D/g, '') || '1234', 10) * 11) % 900000 + 100000);
         return {
           success: true,
@@ -270,7 +268,7 @@ export class TTLockService {
         };
       }
     } catch (err: any) {
-      console.error(`[TTLockService] Keyboard passcode request error: ${err.message}`);
+      Logger.error(`Keyboard passcode request error`, err);
       const fallbackPin = String(Math.floor(100000 + Math.random() * 900000));
       return {
         success: true,
@@ -342,7 +340,7 @@ export class TTLockService {
     const lockId = String(payload.lockId || payload.lock_id || '');
     if (!lockId) return false;
 
-    console.log(`[TTLockService] Processing Webhook unlock record for lockId: ${lockId}...`);
+    Logger.info(`Processing Webhook unlock record for lockId: ${lockId}...`);
 
     try {
       const ground = await prisma.ground.findFirst({
@@ -355,7 +353,7 @@ export class TTLockService {
       });
 
       if (!ground) {
-        console.warn(`[TTLockService] No ground found matching ttlock_lock_id: ${lockId}`);
+        Logger.warn(`No ground found matching ttlock_lock_id: ${lockId}`);
         return false;
       }
 
@@ -385,14 +383,13 @@ export class TTLockService {
           data: { is_door_opened: true },
         });
 
-        console.log(`✅ [TTLockService] Webhook callback auto-confirmed presence for active booking ${activeBooking.id}! (is_door_opened = true)`);
+        Logger.info(`Webhook callback auto-confirmed presence for active booking ${activeBooking.id}! (is_door_opened = true)`);
         return true;
       }
     } catch (err: any) {
-      console.error(`[TTLockService] Error linking webhook callback to booking:`, err);
+      Logger.error(`Error linking webhook callback to booking`, err);
     }
 
     return false;
   }
 }
-

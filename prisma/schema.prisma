@@ -56,6 +56,7 @@ model Ground {
   dailyStats VenueDailyStats[]
   userBans   UserBan[]
 
+  @@index([ttlock_lock_id])
   @@map("grounds")
 }
 
@@ -75,17 +76,17 @@ model Gateway {
 }
 
 model Booking {
-  id             String         @id @default(uuid())
-  ground_id      String
-  ground         Ground         @relation(fields: [ground_id], references: [id], onDelete: Cascade)
-  host_user_id   String
-  host_user      User           @relation("HostBookings", fields: [host_user_id], references: [id], onDelete: Cascade)
-  booking_date   String         // 'YYYY-MM-DD'
-  start_time     String         // 'HH:mm'
-  end_time       String         // 'HH:mm'
-  status         String         @default("confirmed") // 'pending' | 'confirmed' | 'cancelled' | 'cancelled_no_show' | 'completed'
-  payment_status String         @default("paid") // 'unpaid' | 'paid' | 'refunded'
-  is_door_opened Boolean        @default(false)
+  id                     String         @id @default(uuid())
+  ground_id              String
+  ground                 Ground         @relation(fields: [ground_id], references: [id], onDelete: Cascade)
+  host_user_id           String
+  host_user              User           @relation("HostBookings", fields: [host_user_id], references: [id], onDelete: Cascade)
+  booking_date           String         // 'YYYY-MM-DD'
+  start_time             String         // 'HH:mm'
+  end_time               String         // 'HH:mm'
+  status                 String         @default("confirmed") // 'pending' | 'confirmed' | 'cancelled' | 'cancelled_no_show' | 'completed'
+  payment_status         String         @default("paid") // 'unpaid' | 'paid' | 'refunded'
+  is_door_opened         Boolean        @default(false)
   total_price            Float
   invite_token           String         @unique @default(uuid())
   is_looking_for_players Boolean        @default(false)
@@ -97,6 +98,9 @@ model Booking {
   lockLogs     LockLog[]
   joinRequests JoinRequest[]
 
+  @@index([booking_date, status, ground_id])
+  @@index([host_user_id])
+  @@index([is_looking_for_players, status])
   @@map("bookings")
 }
 
@@ -112,6 +116,7 @@ model BookingGuest {
   created_at    DateTime @default(now())
 
   @@unique([booking_id, user_id])
+  @@index([user_id])
   @@map("booking_guests")
 }
 
@@ -129,6 +134,9 @@ model LockLog {
   details     String?
   created_at  DateTime @default(now())
 
+  @@index([ground_id, created_at])
+  @@index([user_id])
+  @@index([booking_id])
   @@map("lock_logs")
 }
 
@@ -153,6 +161,8 @@ model JoinRequest {
   status     String   @default("PENDING") // 'PENDING' | 'APPROVED' | 'REJECTED'
   created_at DateTime @default(now())
 
+  @@index([booking_id, status])
+  @@index([user_iin])
   @@map("join_requests")
 }
 
@@ -183,7 +193,7 @@ model UserBan {
   is_resolved  Boolean   @default(false)
   created_at   DateTime  @default(now())
 
+  @@index([user_id, is_resolved, banned_until])
+  @@index([ground_id])
   @@map("user_bans")
 }
-
-
